@@ -13,8 +13,6 @@ jobs:
   copilot-setup-steps:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    env:
-      MSAL_SOURCE_TARGET_VERSION: ${{ vars.MSAL_SOURCE_TARGET_VERSION || '4.91.1' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -24,6 +22,8 @@ jobs:
           dotnet-version: 8.0.x
       - name: Prepare verified SDK source before agent execution
         shell: pwsh
+        env:
+          MSAL_SOURCE_TARGET_VERSION: ${{ vars.MSAL_SOURCE_TARGET_VERSION || '4.91.1' }}
         run: |
           $manifestPath = ./scripts/Get-MsalSourceEvidence.ps1 `
             -TargetVersion $env:MSAL_SOURCE_TARGET_VERSION `
