@@ -1,6 +1,6 @@
 ---
 name: sample-implementer
-description: Implement a bounded MSAL release update in console-cli with a read-only plan, build gate, and independent review.
+description: Implement source-backed MSAL migrations and scenario improvements with discovery, validation, and independent review.
 tools: [read, search, edit, execute, agent, "github/*"]
 ---
 
@@ -15,18 +15,33 @@ Read AGENTS.md. Follow its scope, safety rules, status formats, and repair budge
    the manifest, local baseline/target source paths, and issue context. Supply
    focused `git diff <baseline-commit> <target-commit> -- <relevant-paths>` output
    from the manifest's sourceRepositoryPath when requested. Require a READY
-   handoff before editing. Preserve source comparison evidence in your summary.
-   Stop for NO_CHANGE or BLOCKED. If custom-agent invocation is unavailable,
+   handoff before editing. Require its scenario improvement matrix and discovery
+   coverage, including new optional parameters, overloads, and options beyond
+   current call sites. Supply broader scenario-family diffs if a used-method-only
+   diff would hide additions. A compatible build is not a discovery assessment.
+   Return an incomplete plan to the planner; never silently skip discovery.
+   Preserve source comparison evidence and candidate decisions in your summary.
+   Accept NO_CHANGE only after the improvement assessment, or stop for BLOCKED.
+   If custom-agent invocation is unavailable,
    return BLOCKED; do not silently substitute your own plan for the separate role.
-2. Make only the plan's necessary changes to the three allowed console-cli files.
+2. Implement the plan's IMPLEMENT candidates and required migration/package
+   changes in the three allowed console-cli files. An improvement need not fix a
+   compilation error, but must have a verified scenario benefit and suitable
+   evidence. Account for every candidate; explain any deviation to the planner
+   and reviewer rather than quietly dropping it. Preserve DEFER items with their
+   approval requirements. Do not force parameter usage or speculative changes.
    Use the exact verified release version and preserve the sample's scenario.
    Do not edit the harness, CI, scripts, or other samples to make checks pass.
 3. Run scripts/Validate-Maintenance.ps1 with -ExpectedVersion set to that version
    and -EvidenceManifest set to the original manifest path.
    Do not execute the application or interactive authentication. Inspect the diff
-   for scope violations and accidental sensitive data.
+   for scope violations and accidental sensitive data. For each implemented
+   improvement, perform its approved noninteractive checks and compare actual
+   results with the intended benefit. Report unsupported checks as NOT RUN with
+   concrete manual/integration steps; do not call compilation proof of behavior.
 4. Invoke sample-reviewer with the original source manifest and inspected source
-   paths, plan, exact changed revision, diff, and actual check output. Require PASS
+   paths, plan and improvement matrix, candidate dispositions, exact changed
+   revision, diff, and actual per-change check output. Require PASS
    before reporting SUCCESS. Findings permit one
    repair followed by fresh validation and review. Stop after two review passes.
 5. Prepare a PR summary in the format required by AGENTS.md, inside this fork.

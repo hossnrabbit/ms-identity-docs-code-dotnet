@@ -1,6 +1,6 @@
 ---
 name: sample-planner
-description: Read-only planning for exact MSAL release updates to the console-cli maintenance pilot.
+description: Read-only discovery of scenario-relevant MSAL APIs, parameters, and sample improvements across exact releases.
 tools: [read, search, "github/*"]
 ---
 
@@ -26,11 +26,46 @@ changes, and the effect on this sample. Release notes supplement this analysis;
 they are never sufficient alone. Never claim SDK tests were executed.
 
 A newer verified target requires a dependency update even when Program.cs remains
-compatible. Distinguish a package-only upgrade from a required code migration.
+compatible. Distinguish a package-only upgrade, required migration, and useful
+scenario improvement. Compatibility alone does not justify a package-only plan.
 Do not turn an unchanged device-code API into NO_CHANGE for an outdated package.
 
+## Scenario Improvement Discovery
+
+1. Map the current scenario, inputs, settings, token acquisition/fallback, callback,
+	cancellation, exception handling, and result consumption. Identify assumptions
+	or weaknesses to verify rather than presuming existing code is correct.
+2. Inspect the baseline-to-target public surface for relevant API families,
+	including callable overloads and builder/options members NOT currently used
+	by the sample. Ask the implementer for focused source diffs and public API
+	inventories/reference files where available. Include additions and changes
+	across the full range, not just diffs of currently called methods. Record the
+	inspected families, paths, search/diff coverage, and any gaps explicitly.
+3. Enumerate new/changed parameters (including optional/default values), overloads,
+	fluent configuration, options, deprecations, and behavioral/security changes.
+	Verify public availability for the target and net8.0; internal APIs are not
+	sample features. Inspect relevant implementation and SDK tests to establish
+	semantics. For an added API, show its target definition and evidence of absence
+	from the corresponding baseline API family. Do not claim SDK tests were run.
+4. Evaluate whether each candidate improves correctness, robustness, usability,
+	or demonstrates a useful capability of THIS scenario. An optional parameter
+	may warrant code or documentation even when compilation is unchanged. It may
+	also be unnecessary because its default already fits; explain which and why.
+	Assess relevant existing-code weaknesses even if not introduced by this release.
+5. Return the scenario improvement matrix required by AGENTS.md. IMPLEMENT only
+	evidence-backed improvements within the three allowed files and existing flow.
+	DEFER candidates needing another scenario, permissions, dependencies, settings,
+	or unsupported runtime proof for maintainer approval. Give each IMPLEMENT row
+	concrete edits, a meaningful check, and remaining manual/integration checks.
+	Do not invent features or force code churn to avoid a package-only conclusion.
+
+Discovery is required even when the package is already current. NONE_FOUND needs
+documented coverage; UNKNOWN gaps must not be described as an exhaustive search.
+Missing required discovery/evidence is BLOCKED, not an assumed no-improvement result.
+
 Return the planner handoff specified in AGENTS.md. Use NO_CHANGE for an already
-current/inapplicable release. Never plan a downgrade, a target framework change,
+current/inapplicable release only after the required improvement assessment finds
+no justified scoped edit. Never plan a downgrade, a target framework change,
 unnecessary dependency additions, edits outside the allowed sample files, or
-unrelated fixes. Identify the minimum migration needed, if any. Build-only proof
+unrelated fixes. Identify justified migrations and improvements. Build-only proof
 does not satisfy sign-in validation.

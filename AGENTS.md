@@ -21,6 +21,12 @@ device-code sample with a direct `Microsoft.Identity.Client` reference.
   implementations, SDK tests, and migration guidance across the full baseline to
   target range. Do not compare against the moving SDK main branch. Treat SDK
   internals as evidence, not automatic application coding recommendations.
+- Discover scenario-relevant additions, not just changes to calls already used.
+  Inspect new parameters (including optional parameters and their defaults),
+  overloads, builder methods, options, and changed/deprecated behavior for the
+  device-code and silent-acquisition scenario. Review current sample behavior
+  critically; compilation and existing code are not correctness evidence alone.
+  Require a scenario improvement matrix before deciding whether code is needed.
 - Source acquisition belongs to setup, not the agent. Do not edit the prepared
   evidence, execute downloaded SDK code/build scripts, or commit downloaded
   sources, packages, or manifest. `.maintenance-evidence` is ignored by Git.
@@ -28,15 +34,23 @@ device-code sample with a direct `Microsoft.Identity.Client` reference.
   `MSAL_SOURCE_TARGET_VERSION` repository Actions variable BEFORE a new session.
   Never treat a different prepared target as equivalent to the requested release.
 - Only update `console-cli/cli.csproj`, `console-cli/Program.cs`, and
-  `console-cli/README.md` when a verified release requires it. Do not modify other
+  `console-cli/README.md` for verified migrations or justified scenario
+  improvements. Do not modify other
   samples, the harness, workflows, test scripts, credentials, or tenant settings.
 - Do not downgrade, add unnecessary dependencies, broadly modernize the project,
   change target frameworks, or fix unrelated defects.
 - A verified newer MSAL release requires updating the direct package reference;
   unchanged API usage is not a reason to leave the older package installed.
-  Preserve Program.cs when source comparison finds no necessary code adaptation.
-  If the sample is already current or the release is inapplicable, report
-  NO_CHANGE with evidence and do not intentionally create an empty PR. If the
+  Implement source-supported, useful improvements within the existing scenario
+  and allowed files, even when old calls still compile. Do not adopt a new option
+  merely because it exists: explain its benefit, defaults, tradeoffs, and check.
+  Preserve existing authentication flows, scopes, tenant settings, and safe
+  defaults. Defer new scenarios, dependencies, permissions, provisioning, and
+  changes outside the allowed files for explicit maintainer approval.
+  A package-only update needs a completed discovery assessment explaining why
+  no code improvement is justified. An already-current package is not permission
+  to skip that assessment. Use NO_CHANGE only when no justified scoped edit
+  remains, with evidence, and do not intentionally create an empty PR. If the
   hosted entry point already created a draft PR, explain the no-change result
   for the maintainer to close it.
 - Keep branches and PRs inside `hossnrabbit/ms-identity-docs-code-dotnet`, targeting
@@ -57,19 +71,29 @@ sandbox. Confirm tool restrictions and delegation in hosted session logs.
 The planner returns: status (READY / NO_CHANGE / BLOCKED), package, current and
 target versions, manifest path, both exact tag/commit identities, inspected source
 and test paths/symbols with findings, relevant baseline-to-target differences,
-allowed files, minimal changes, validation commands, and risks. It reads the local
+discovery coverage and gaps, the scenario improvement matrix, allowed files,
+justified changes, validation commands, and risks. Each matrix row must include
+the public symbol, baseline/target signature or behavior (including parameter
+defaults), source/test evidence from both versions or proof an API is new, sample
+impact and benefit, decision (IMPLEMENT / DEFER / NOT_APPLICABLE), rationale,
+planned code/documentation changes, and validation plus remaining runtime checks.
+If no candidates are found, report NONE_FOUND with inspected API families and
+diff/search coverage; uninspected or inconclusive areas are UNKNOWN, not proof
+that improvements do not exist. It reads the local
 source trees supplied by the implementer, not an authenticated GitHub tool as a
 prerequisite. When a relevant diff is needed, ask the implementer to run read-only
 git diff in the evidence repository and supply it. Do not give the planner a shell.
 
 The implementer returns: status (SUCCESS / NO_CHANGE / BLOCKED / SETUP_BLOCKED), plan summary,
 changed files, commands and actual results, review findings and disposition,
-and unverified requirements. A failed review permits one local repair and one
+the disposition of every improvement candidate, and unverified requirements.
+A failed review permits one local repair and one
 fresh review. Stop after two review passes; do not loop indefinitely.
 
 The reviewer returns: verdict (PASS / CHANGES_REQUIRED / BLOCKED), findings ordered
 by severity with file references, scope/dependency risks, validation evidence,
-and missing checks. It must not edit, run commands, or approve/merge a PR.
+discovery coverage and candidate-disposition assessment, and missing checks.
+It must not edit, run commands, or approve/merge a PR.
 
 ## Validation
 
@@ -92,6 +116,7 @@ in committed source.
 
 Include both source tag/commit identities, inspected SDK source/tests and comparison
 findings, release/package evidence, applicability, before/after version, narrowly
-scoped changes, build/check results, independent-review outcome, and explicit
+scoped changes, the scenario improvement matrix and discovery limitations,
+implemented/deferred decisions, build/check results, independent-review outcome, and explicit
 NOT RUN items. Human review and merge remain required. Keep approval enabled for
 workflows on Copilot PRs and inspect code/workflow changes before running them.

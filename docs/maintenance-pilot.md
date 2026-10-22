@@ -84,6 +84,50 @@ tests across BOTH release commits, not SDK main or only the final patch notes.
 A newer verified release requires a package update, even if no Program.cs changes
 are necessary. Do not mistake unchanged API usage for an already-current package.
 
+## Scenario Improvement Discovery
+
+The planner must assess ways to improve this scenario, not merely preserve
+compilable code. Discovery covers public parameters and optional/default values,
+overloads, builders/options, deprecations, and behavioral changes across the
+verified version range. Include relevant APIs NOT already called by the sample.
+Review existing control flow, callback/cancellation, error handling, settings,
+and result use critically against public contracts, implementations, and tests.
+The package being current does not skip this assessment.
+
+Return a scenario improvement matrix with these fields for each candidate:
+
+| Field | Required evidence |
+| --- | --- |
+| API and difference | Public symbol, baseline/target signature or behavior, parameter defaults |
+| Provenance | Source/test paths at both commits, or proof the public API is newly added |
+| Scenario benefit | Existing weakness or useful capability, applicability, defaults and tradeoffs |
+| Decision | IMPLEMENT, DEFER, or NOT_APPLICABLE with a concrete rationale |
+| Proposed change | Exact code/documentation edits, or approval needed for deferred scope |
+| Validation | Meaningful checks, actual results in implementation, and remaining runtime checks |
+
+Record inspected API families and diff/search coverage. NONE_FOUND requires an
+evidence-backed negative assessment; UNKNOWN gaps cannot be presented as proof
+that no useful additions exist. Missing required discovery blocks implementation.
+The reviewer independently checks coverage and candidate decisions, including
+whether useful optional parameters or other capabilities were overlooked.
+
+Implement useful, source-supported improvements within the existing scenario and
+three allowed sample files, even when compilation did not require the change.
+Do not add explicit default arguments or use every new API just to create a diff.
+A package-only update is still valid when the completed assessment justifies it.
+New authentication scenarios, permissions, dependencies, tenant settings, or
+files remain deferred for explicit maintainer approval.
+
+Discovery and reviewer requirements are agent instructions, not an exhaustive
+API-diff engine or a machine-enforced completeness check. Existing CI still
+validates the project and build only. Hosted logs and the PR matrix must show
+actual discovery and independent review. No new unit-test suite or runtime
+authentication automation is added by this harness change. For behavior that
+cannot be exercised, report NOT RUN and specific manual/integration checks;
+never describe compilation or inspecting SDK tests as runtime proof.
+
+## Post-change Validation
+
 After the maintenance edit, validate using that original manifest:
 
 ```powershell
