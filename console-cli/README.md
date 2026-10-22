@@ -15,7 +15,7 @@ urlFragment: ms-identity-docs-code-console-cli-csharp
 
 # .NET (C#) | console | user sign-in, protected web API access (Microsoft Graph) | Microsoft identity platform
 
-This .NET 8 (C#) console application authenticates a user via the device code flow, and then makes a request to the Graph API as the authenticated user. The response to the request is printed to the console.
+This .NET 8 (C#) console application attempts to acquire a Microsoft Graph token silently when an account is in MSAL's cache, then falls back to device code sign-in when user interaction is required. If silent acquisition returns a claims challenge, the sample forwards it to the device-code request. It makes one request to the Graph API as the authenticated user and prints the response. Press Ctrl+C to cancel token acquisition.
 
 ```console
 $ dotnet run
@@ -74,7 +74,7 @@ ClientId = ""
 dotnet run
 ```
 
-Follow the device code flow instructions that are presented. If everything worked, you should receive a response similar to this:
+Follow the device code flow instructions that are presented. Press Ctrl+C to cancel token acquisition. If everything worked, you should receive a response similar to this:
 
 ```json
 {
@@ -95,9 +95,11 @@ Follow the device code flow instructions that are presented. If everything worke
 
 ## About the code
 
-This .NET 6 (C#) console application prompts the user to sign in via their device using a code provided by Microsoft Authentication Library (MSAL). The user completes this flow in their chosen web browser. Upon successful authentication, an HTTP GET request to the Microsoft Graph /me endpoint is issued with the user's access token in the HTTP header. The response from the GET request is then displayed in the console.
+This .NET 8 (C#) console application creates a public client, checks its account cache, and attempts silent token acquisition before falling back to device code sign-in. A nonempty claims challenge returned by silent acquisition is included in the device-code request. The device-code callback displays MSAL's instructions, and MSAL polls until authentication completes or the operation is cancelled. Upon successful authentication, the app sends one HTTP GET request to the Microsoft Graph /me endpoint using the access token and displays the response.
 
-This sample does not demonstrate the usage of cached access tokens. Access token caching should be used in situations where the console application will need to access the same protected API using the same access token multiple times across the life of the user's session in the application. This sample, as written, does not perform multiple calls and wouldn't result in a token cache hit. For additional information, see [Get a token from the token cache using MSAL.NET](https://docs.microsoft.com/azure/active-directory/develop/msal-net-acquire-token-silently).
+The sample uses MSAL's default in-memory token cache and does not configure persistence between runs. A new process therefore does not reuse tokens from a previous run; because the sample makes only one Graph request, the silent path is primarily an example of the pattern rather than a repeated-call cache demonstration. For more information, see [Get a token from the token cache using MSAL.NET](https://docs.microsoft.com/azure/active-directory/develop/msal-net-acquire-token-silently).
+
+If token acquisition fails with an MSAL exception, the sample prints its error code and correlation ID, plus the total duration when MSAL provides that metadata. It does not print the access token.
 
 ## Reporting problems
 

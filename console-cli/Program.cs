@@ -5,10 +5,10 @@ using System.Text.Json;
 var config = new PublicClientApplicationOptions
 {
     // 'Directory (tenant) ID' of the app registration in the Microsoft Entra admin center
-    TenantId = "Enter the client ID obtained from the Microsoft Entra admin center",
+    TenantId = "Enter the tenant ID obtained from the Microsoft Entra admin center",
 
     // 'Application (client) ID' of the app registration in the Microsoft Entra admin center
-    ClientId = "Enter the tenant ID obtained from the Microsoft Entra admin center"
+    ClientId = "Enter the client ID obtained from the Microsoft Entra admin center"
 };
 
 // In order to take advantage of token caching, your MSAL client singleton must
@@ -18,41 +18,76 @@ IPublicClientApplication publicMsalClient = PublicClientApplicationBuilder.Creat
                                                                           .Build();
 
 AuthenticationResult? msalAuthenticationResult = null;
-
-// Attempt to use a cached access token if one is available. This will renew existing, but
-// expired access tokens if possible. In this specific sample, this will always result in
-// a cache miss, but this pattern would be what you'd use on subsequent calls that require
-// the usage of the same access token.
-IEnumerable<IAccount> accounts = (await publicMsalClient.GetAccountsAsync()).ToList();
-
-if (accounts.Any())
+string? claimsChallenge = null;
+using var cancellationTokenSource = new CancellationTokenSource();
+ConsoleCancelEventHandler cancelHandler = (_, eventArgs) =>
 {
-    try
+    eventArgs.Cancel = true;
+    cancellationTokenSource.Cancel();
+};
+Console.CancelKeyPress += cancelHandler;
+
+try
+{
+    // Attempt to use a cached access token if one is available. This will renew existing, but
+    // expired access tokens if possible. This sample does not persist the cache between runs.
+    IEnumerable<IAccount> accounts = (await publicMsalClient.GetAccountsAsync()).ToList();
+
+    if (accounts.Any())
     {
-        msalAuthenticationResult = await publicMsalClient.AcquireTokenSilent(
-            new[] { "https://graph.microsoft.com/User.Read" },
-            accounts.First()).ExecuteAsync();
+        try
+        {
+            msalAuthenticationResult = await publicMsalClient.AcquireTokenSilent(
+                new[] { "https://graph.microsoft.com/User.Read" },
+                accounts.First()).ExecuteAsync(cancellationTokenSource.Token);
+        }
+        catch (MsalUiRequiredException exception)
+        {
+            // No usable cached token was found for this scope + account or Entra ID insists in
+            // an interactive user flow.
+            claimsChallenge = exception.Claims;
+        }
     }
-    catch (MsalUiRequiredException)
+
+    if (msalAuthenticationResult == null)
     {
-        // No usable cached token was found for this scope + account or Entra ID insists in
-        // an interactive user flow.
+        // Initiate the device code flow.
+        var deviceCodeRequest = publicMsalClient.AcquireTokenWithDeviceCode(
+            new[] { "https://graph.microsoft.com/User.Read" }, deviceCodeResultCallback =>
+        {
+            // This will print the message on the console which tells the user where to go sign-in using
+            // a separate browser and the code to enter once they sign in.
+            // The AcquireTokenWithDeviceCode() method will poll the server after firing this
+            // device code callback to look for the successful login of the user via that browser.
+            Console.WriteLine(deviceCodeResultCallback.Message);
+            return Task.CompletedTask;
+        });
+
+        if (!string.IsNullOrWhiteSpace(claimsChallenge))
+        {
+            deviceCodeRequest = deviceCodeRequest.WithClaims(claimsChallenge);
+        }
+
+        msalAuthenticationResult = await deviceCodeRequest.ExecuteAsync(cancellationTokenSource.Token);
     }
 }
-
-if (msalAuthenticationResult == null)
+catch (OperationCanceledException) when (cancellationTokenSource.IsCancellationRequested)
 {
-    // Initiate the device code flow.
-    msalAuthenticationResult = await publicMsalClient.AcquireTokenWithDeviceCode(
-        new[] { "https://graph.microsoft.com/User.Read" }, deviceCodeResultCallback =>
+    Console.WriteLine("Token acquisition was cancelled.");
+    return;
+}
+catch (MsalException exception)
+{
+    Console.Error.WriteLine(
+        $"Token acquisition failed. Error code: {exception.ErrorCode}; Correlation ID: {exception.CorrelationId}");
+
+    if (exception.AuthenticationResultMetadata is { } metadata)
     {
-        // This will print the message on the console which tells the user where to go sign-in using
-        // a separate browser and the code to enter once they sign in.
-        // The AcquireTokenWithDeviceCode() method will poll the server after firing this
-        // device code callback to look for the successful login of the user via that browser.
-        Console.WriteLine(deviceCodeResultCallback.Message);
-        return Task.CompletedTask;
-    }).ExecuteAsync();
+        Console.Error.WriteLine(
+            $"Token acquisition duration: {metadata.DurationTotalInMs} ms.");
+    }
+
+    throw;
 }
 
 // At this point we now have a valid access token for Microsoft Graph, with only the specific scopes
