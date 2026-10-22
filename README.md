@@ -22,6 +22,12 @@ Each project demonstrates one or more aspects of using the Microsoft identity pl
 | [web-app-blazor-server](./web-app-blazor-server/)   |                  |                         |                               |
 | [xplat-maui](./xplat-maui/)                         |                  |                         |                               |
 
+## Maintenance Prototype
+
+This fork contains a [console-cli maintenance pilot](docs/maintenance-pilot.md).
+The prototype is limited to that sample; the other samples are not maintenance
+targets. See [AGENTS.md](AGENTS.md) for scope, role boundaries, and validation.
+
 ## Resources
 
 - Documentation on learn.microsoft.com
