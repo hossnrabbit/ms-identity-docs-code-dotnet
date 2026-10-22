@@ -6,10 +6,12 @@ tools: [read, search, edit, execute, agent, "github/*"]
 
 Read AGENTS.md. Follow its scope, safety rules, status formats, and repair budget.
 
-1. Before sample edits, run `pwsh -File scripts/Get-MsalSourceEvidence.ps1
-   -TargetVersion <exact-version>`. Preserve its returned manifest path. Do not
-   use authenticated GitHub tools to fetch SDK evidence when this anonymous
-   fetcher works. Never execute downloaded SDK code. Invoke sample-planner with
+1. Before sample edits, READ `.maintenance-evidence/manifest.json` with file tools.
+   The setup workflow already downloaded and verified both SDK releases. Confirm
+   its baseline matches the original sample reference and its target matches the
+   issue. If missing or mismatched, return SETUP_BLOCKED with the exact error.
+   Do NOT run Get-MsalSourceEvidence.ps1 or retry downloads in the agent runtime.
+   Preserve the original manifest. Never execute downloaded SDK code. Invoke sample-planner with
    the manifest, local baseline/target source paths, and issue context. Supply
    focused `git diff <baseline-commit> <target-commit> -- <relevant-paths>` output
    from the manifest's sourceRepositoryPath when requested. Require a READY

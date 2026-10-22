@@ -24,8 +24,9 @@ update that dependency or alter sample code.
    dispatch may supply the same key using the coordinator contract.
 6. Inspect the issue, then use Assign to agent. Select Copilot and the
    `sample-implementer` custom agent, with this fork and `main` as the destination.
-   The implementer must run the source-evidence fetcher before planning and supply
-   its local SDK trees to the planner. Release-note text alone is insufficient.
+   Copilot setup must prepare `.maintenance-evidence/manifest.json` and both local
+   SDK trees before the session starts. The implementer reads that snapshot and
+   supplies it to the planner. Release-note text alone is insufficient.
 7. Inspect session logs for a real planner invocation, validation, and separate
    reviewer invocation. Missing delegation means BLOCKED, not a successful run.
    Inspect changes before approving workflows. A separate eligible maintainer
@@ -38,13 +39,28 @@ Copilot entitlement, not from that workflow token.
 
 ## Validation and Limits
 
-Before changing the dependency, fetch source evidence for the exact target:
+Source acquisition runs inside `copilot-setup-steps.yml` BEFORE agent execution.
+Setup downloads both releases, verifies NuGet/tag commits, and checks source/test
+files and the manifest handoff in a separate Bash step. It writes the manifest to
+`.maintenance-evidence/manifest.json` and exports `MSAL_SOURCE_MANIFEST` as a
+convenience. The fixed repository-relative path does not depend on that environment
+variable being available to the agent. Git ignores the entire evidence directory.
+
+The pilot setup target defaults to 4.91.1. For a different release, a maintainer
+must set the repository Actions variable `MSAL_SOURCE_TARGET_VERSION` BEFORE
+starting a fresh session. The issue target must match the prepared manifest.
+This is deliberately a single-target pilot, not concurrent multi-release routing.
+The agent must not retry source acquisition or modify a prepared snapshot. Missing
+or mismatched evidence is SETUP_BLOCKED and needs a setup repair/new session.
+
+For a local maintainer-only source acquisition check:
 
 ```powershell
-./scripts/Get-MsalSourceEvidence.ps1 -TargetVersion 4.91.1
+./scripts/Get-MsalSourceEvidence.ps1 -TargetVersion 4.91.1 -OutputDirectory ./.maintenance-evidence
 ```
 
-Save the printed manifest path. The script downloads official NuGet packages for
+The output directory must not already exist; the script refuses to overwrite a
+snapshot. Save the printed manifest path. The script downloads official NuGet packages for
 the sample's baseline and requested stable target, checks their repository commit
 metadata against exact Git tags, and creates temporary source worktrees plus a
 file-level comparison manifest. It never executes SDK code or builds the SDK.
@@ -54,10 +70,13 @@ Downloads are anonymous; no GitHub API token/SAML grant is needed. Network acces
 must still be permitted by the hosted environment. Temporary artifacts are not
 committed and must remain unchanged for planning, validation, and review.
 
-The manual Maintenance validation workflow accepts optional `source_target_version`
-to smoke-test source acquisition on its Linux runner before a new Copilot task.
-This checks fetching/provenance, not the agent's actual source analysis or its
-runtime-specific firewall policy. Ordinary PR checks do not download SDK source.
+Manually run Copilot setup steps after publishing the harness. Inspect the
+Prepare verified SDK source and Verify source handoff steps before assigning a
+new task. The earlier manual Maintenance validation source-fetch smoke check did
+not prove that downloads could run inside the agent sandbox: issue #4 / PR #5
+reported Resource temporarily unavailable there. Setup now removes that runtime
+download requirement. Ordinary PR validation checks do not download SDK source.
+Successful setup still does not prove the agent performed source analysis/review.
 
 The implementer supplies focused diffs on request; the read-only planner compares
 the actual device-code/silent-token API contracts, implementation, and relevant
@@ -68,7 +87,7 @@ are necessary. Do not mistake unchanged API usage for an already-current package
 After the maintenance edit, validate using that original manifest:
 
 ```powershell
-./scripts/Validate-Maintenance.ps1 -ExpectedVersion 4.91.1 -EvidenceManifest <printed-manifest-path>
+./scripts/Validate-Maintenance.ps1 -ExpectedVersion 4.91.1 -EvidenceManifest ./.maintenance-evidence/manifest.json
 ```
 
 For a baseline-only CI/build check without a maintenance task:

@@ -10,8 +10,10 @@ run commands, start authentication, or delegate work.
 Require the implementer's source-evidence manifest and local baseline/target SDK
 trees. Check their versions against console-cli/cli.csproj and the requested exact
 target. Record both tag/commit identities. Read local SDK files; an authenticated
-GitHub API or release-note lookup is not a prerequisite. If the manifest is
-missing, ask the implementer to run Get-MsalSourceEvidence.ps1 before edits.
+GitHub API or release-note lookup is not a prerequisite. Read the setup-prepared
+`.maintenance-evidence/manifest.json`; if it is missing or mismatched, report
+BLOCKED and request a setup repair. Do not ask the implementer to run the fetcher
+or retry downloads inside the agent runtime.
 
 Inspect the sample's actual API usage, then locate and read the corresponding
 public API contracts, implementations, and relevant SDK tests in BOTH source

@@ -2,7 +2,8 @@
 param(
     [Parameter(Mandatory)]
     [ValidatePattern('^\d+\.\d+\.\d+$')]
-    [string] $TargetVersion
+    [string] $TargetVersion,
+    [string] $OutputDirectory
 )
 
 Set-StrictMode -Version Latest
@@ -20,7 +21,12 @@ if ([version] $TargetVersion -lt [version] $baselineVersion) {
     throw 'Downgrades are not allowed.'
 }
 
-$evidencePath = Join-Path ([System.IO.Path]::GetTempPath()) ('msal-source-evidence-' + [guid]::NewGuid())
+$evidencePath = if ($OutputDirectory) {
+    [System.IO.Path]::GetFullPath($OutputDirectory)
+} else {
+    Join-Path ([System.IO.Path]::GetTempPath()) ('msal-source-evidence-' + [guid]::NewGuid())
+}
+if (Test-Path -LiteralPath $evidencePath) { throw 'Evidence directory already exists; preserve the original evidence rather than overwriting it.' }
 New-Item -ItemType Directory -Path $evidencePath | Out-Null
 $sourcePath = Join-Path $evidencePath 'sdk'
 $previousPrompt = $env:GIT_TERMINAL_PROMPT
