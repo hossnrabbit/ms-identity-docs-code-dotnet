@@ -19,8 +19,15 @@ Inspect the sample's actual API usage, then locate and read the corresponding
 public API contracts, implementations, and relevant SDK tests in BOTH source
 trees. Focus on PublicClientApplicationBuilder, PublicClientApplicationOptions,
 AcquireTokenSilent, AcquireTokenWithDeviceCode, device-code callbacks, and the
-exception/result behavior used by Program.cs. Request focused baseline-to-target
-git diffs from the implementer when necessary. Consider the whole version range,
+exception/result behavior used by Program.cs. Read the manifest's sourceDiffs
+entries, starting with scenario-apis.diff in bounded ranges; use sdk-client.diff
+to extend coverage beyond the focused paths. These patches use the exact
+baseline/target commits, not SDK main. They do not replace checking public
+availability, implementation, and tests in both source trees. If more evidence is
+needed, return NEEDS_EVIDENCE with exact paths/symbols and the comparison required;
+the implementer must supply it and reinvoke you. Do not label the lack of your own
+shell as BLOCKED. Request focused baseline-to-target git diffs from the
+implementer when necessary. Consider the whole version range,
 not just the latest patch notes. Cite concrete source paths and symbols, relevant
 changes, and the effect on this sample. Release notes supplement this analysis;
 they are never sufficient alone. Never claim SDK tests were executed.

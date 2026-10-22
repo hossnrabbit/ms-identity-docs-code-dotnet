@@ -63,7 +63,11 @@ The output directory must not already exist; the script refuses to overwrite a
 snapshot. Save the printed manifest path. The script downloads official NuGet packages for
 the sample's baseline and requested stable target, checks their repository commit
 metadata against exact Git tags, and creates temporary source worktrees plus a
-file-level comparison manifest. It never executes SDK code or builds the SDK.
+file-level comparison manifest. It also prepares scenario-apis.diff and the broader
+sdk-client.diff from those exact commits, recording paths, path coverage, and
+SHA256 hashes in sourceDiffs. Read patches in bounded ranges; the broader patch
+can be large. These are source comparisons, not exhaustive public API inventories.
+It never executes SDK code or builds the SDK.
 Only exact three-part stable versions are supported initially. A missing tag,
 missing commit metadata, provenance mismatch, or network failure blocks the task.
 Downloads are anonymous; no GitHub API token/SAML grant is needed. Network access
@@ -78,7 +82,11 @@ reported Resource temporarily unavailable there. Setup now removes that runtime
 download requirement. Ordinary PR validation checks do not download SDK source.
 Successful setup still does not prove the agent performed source analysis/review.
 
-The implementer supplies focused diffs on request; the read-only planner compares
+The implementer supplies the prepared diff paths up front and additional focused
+comparisons on request. A planner NEEDS_EVIDENCE response is an intermediate
+handoff: the implementer supplies the requested existing patch sections or runs
+the focused read-only diff and reinvokes the planner. It must not stop merely
+because the planner cannot execute commands. The read-only planner compares
 the actual device-code/silent-token API contracts, implementation, and relevant
 tests across BOTH release commits, not SDK main or only the final patch notes.
 A newer verified release requires a package update, even if no Program.cs changes

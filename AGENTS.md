@@ -68,7 +68,7 @@ missing role separately. Never claim a separate review without an actual review.
 Profile files are not an automatic pipeline, and prose rules are not a security
 sandbox. Confirm tool restrictions and delegation in hosted session logs.
 
-The planner returns: status (READY / NO_CHANGE / BLOCKED), package, current and
+The planner returns: status (READY / NO_CHANGE / NEEDS_EVIDENCE / BLOCKED), package, current and
 target versions, manifest path, both exact tag/commit identities, inspected source
 and test paths/symbols with findings, relevant baseline-to-target differences,
 discovery coverage and gaps, the scenario improvement matrix, allowed files,
@@ -81,8 +81,15 @@ If no candidates are found, report NONE_FOUND with inspected API families and
 diff/search coverage; uninspected or inconclusive areas are UNKNOWN, not proof
 that improvements do not exist. It reads the local
 source trees supplied by the implementer, not an authenticated GitHub tool as a
-prerequisite. When a relevant diff is needed, ask the implementer to run read-only
-git diff in the evidence repository and supply it. Do not give the planner a shell.
+prerequisite. Setup supplies full-client and focused scenario patches in the
+manifest's sourceDiffs entries. Read the scenario patch first, in bounded ranges;
+use the full-client patch to extend discovery coverage beyond those paths.
+These are source diffs, not a complete public API inventory; inspect definitions,
+implementations, and tests in both trees. When more comparison evidence is needed,
+return NEEDS_EVIDENCE with exact paths/symbols and the missing comparison. The
+implementer must supply it and reinvoke the planner, not end the task at this
+intermediate handoff. Use BLOCKED only for a concrete unsatisfied prerequisite
+after attempting the permitted evidence handoff. Do not give the planner a shell.
 
 The implementer returns: status (SUCCESS / NO_CHANGE / BLOCKED / SETUP_BLOCKED), plan summary,
 changed files, commands and actual results, review findings and disposition,

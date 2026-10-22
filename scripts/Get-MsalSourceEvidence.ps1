@@ -81,6 +81,32 @@ try {
     $target = $releases | Where-Object version -eq $TargetVersion
     $changedFiles = @(& git -C $sourcePath diff --name-status $baseline.commit $target.commit)
     if ($LASTEXITCODE -ne 0) { throw 'Cannot compare the verified release source trees.' }
+    $diffDefinitions = @(
+        @{ name = 'sdk-client'; paths = @('src/client') },
+        @{ name = 'scenario-apis'; paths = @(
+            'src/client/Microsoft.Identity.Client/ApiConfig',
+            'src/client/Microsoft.Identity.Client/AppConfig',
+            'src/client/Microsoft.Identity.Client/PublicClientApplication.cs',
+            'src/client/Microsoft.Identity.Client/IPublicClientApplication.cs',
+            'src/client/Microsoft.Identity.Client/ClientApplicationBase.cs',
+            'src/client/Microsoft.Identity.Client/IClientApplicationBase.cs',
+            'src/client/Microsoft.Identity.Client/AuthenticationResult.cs',
+            'src/client/Microsoft.Identity.Client/DeviceCodeResult.cs',
+            ':(glob)src/client/Microsoft.Identity.Client/Msal*Exception.cs'
+        ) }
+    )
+    $sourceDiffs = @(foreach ($definition in $diffDefinitions) {
+        $diffPath = Join-Path $evidencePath ($definition.name + '.diff')
+        $diffContent = @(& git --no-pager -C $sourcePath diff --no-ext-diff --no-textconv --unified=3 $baseline.commit $target.commit -- @($definition.paths))
+        if ($LASTEXITCODE -ne 0) { throw "Cannot prepare $($definition.name) source diff." }
+        [string]::Join([Environment]::NewLine, $diffContent) | Set-Content -LiteralPath $diffPath -Encoding utf8
+        [ordered]@{
+            name = $definition.name
+            paths = @($definition.paths)
+            path = $diffPath
+            sha256 = (Get-FileHash -LiteralPath $diffPath -Algorithm SHA256).Hash.ToLowerInvariant()
+        }
+    })
     $manifestPath = Join-Path $evidencePath 'manifest.json'
     [ordered]@{
         schemaVersion = 1
@@ -90,6 +116,7 @@ try {
         releases = @($releases)
         changedFiles = $changedFiles
         sourceRepositoryPath = $sourcePath
+        sourceDiffs = $sourceDiffs
         limitations = 'Source inspection and compilation do not prove runtime authentication. SDK code must not be executed.'
     } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifestPath -Encoding utf8
     Write-Host "PASS: NuGet/tag commit provenance verified for $baselineVersion and $TargetVersion."

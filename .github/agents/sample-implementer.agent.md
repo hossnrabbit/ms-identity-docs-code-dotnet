@@ -12,13 +12,20 @@ Read AGENTS.md. Follow its scope, safety rules, status formats, and repair budge
    issue. If missing or mismatched, return SETUP_BLOCKED with the exact error.
    Do NOT run Get-MsalSourceEvidence.ps1 or retry downloads in the agent runtime.
    Preserve the original manifest. Never execute downloaded SDK code. Invoke sample-planner with
-   the manifest, local baseline/target source paths, and issue context. Supply
+   the manifest, local baseline/target source paths, setup-prepared sourceDiffs
+   paths/coverage, and issue context. Require the planner to read scenario-apis.diff
+   in bounded ranges and use sdk-client.diff for broader coverage. Supply
    focused `git diff <baseline-commit> <target-commit> -- <relevant-paths>` output
    from the manifest's sourceRepositoryPath when requested. Require a READY
    handoff before editing. Require its scenario improvement matrix and discovery
    coverage, including new optional parameters, overloads, and options beyond
    current call sites. Supply broader scenario-family diffs if a used-method-only
    diff would hide additions. A compatible build is not a discovery assessment.
+   Treat NEEDS_EVIDENCE as an intermediate request: read the requested prepared
+   patch sections or run the focused read-only diff, supply the actual output,
+   and reinvoke sample-planner. Do not report BLOCKED merely because a read-only
+   planner cannot execute git. If a command fails, report its exact command/error
+   and check the existing prepared patches and source trees before stopping.
    Return an incomplete plan to the planner; never silently skip discovery.
    Preserve source comparison evidence and candidate decisions in your summary.
    Accept NO_CHANGE only after the improvement assessment, or stop for BLOCKED.
