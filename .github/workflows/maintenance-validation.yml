@@ -2,6 +2,11 @@ name: Maintenance validation
 
 on:
   workflow_dispatch:
+    inputs:
+      source_target_version:
+        description: Optional exact stable MSAL version for source-fetch smoke test
+        required: false
+        type: string
   pull_request:
     branches: [main]
 
@@ -19,6 +24,12 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
+      - name: Verify exact release source acquisition
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.source_target_version != '' }}
+        shell: pwsh
+        env:
+          SOURCE_TARGET_VERSION: ${{ inputs.source_target_version }}
+        run: ./scripts/Get-MsalSourceEvidence.ps1 -TargetVersion $env:SOURCE_TARGET_VERSION
       - name: Validate pilot project and build
         shell: pwsh
         run: ./scripts/Validate-Maintenance.ps1

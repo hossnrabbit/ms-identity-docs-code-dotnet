@@ -24,8 +24,8 @@ update that dependency or alter sample code.
    dispatch may supply the same key using the coordinator contract.
 6. Inspect the issue, then use Assign to agent. Select Copilot and the
    `sample-implementer` custom agent, with this fork and `main` as the destination.
-   Confirm the task has readable official release evidence; provide the relevant
-   excerpt when the read-only planner cannot retrieve it.
+   The implementer must run the source-evidence fetcher before planning and supply
+   its local SDK trees to the planner. Release-note text alone is insufficient.
 7. Inspect session logs for a real planner invocation, validation, and separate
    reviewer invocation. Missing delegation means BLOCKED, not a successful run.
    Inspect changes before approving workflows. A separate eligible maintainer
@@ -37,6 +37,41 @@ to create issues. Permission to assign Copilot comes from your GitHub access and
 Copilot entitlement, not from that workflow token.
 
 ## Validation and Limits
+
+Before changing the dependency, fetch source evidence for the exact target:
+
+```powershell
+./scripts/Get-MsalSourceEvidence.ps1 -TargetVersion 4.91.1
+```
+
+Save the printed manifest path. The script downloads official NuGet packages for
+the sample's baseline and requested stable target, checks their repository commit
+metadata against exact Git tags, and creates temporary source worktrees plus a
+file-level comparison manifest. It never executes SDK code or builds the SDK.
+Only exact three-part stable versions are supported initially. A missing tag,
+missing commit metadata, provenance mismatch, or network failure blocks the task.
+Downloads are anonymous; no GitHub API token/SAML grant is needed. Network access
+must still be permitted by the hosted environment. Temporary artifacts are not
+committed and must remain unchanged for planning, validation, and review.
+
+The manual Maintenance validation workflow accepts optional `source_target_version`
+to smoke-test source acquisition on its Linux runner before a new Copilot task.
+This checks fetching/provenance, not the agent's actual source analysis or its
+runtime-specific firewall policy. Ordinary PR checks do not download SDK source.
+
+The implementer supplies focused diffs on request; the read-only planner compares
+the actual device-code/silent-token API contracts, implementation, and relevant
+tests across BOTH release commits, not SDK main or only the final patch notes.
+A newer verified release requires a package update, even if no Program.cs changes
+are necessary. Do not mistake unchanged API usage for an already-current package.
+
+After the maintenance edit, validate using that original manifest:
+
+```powershell
+./scripts/Validate-Maintenance.ps1 -ExpectedVersion 4.91.1 -EvidenceManifest <printed-manifest-path>
+```
+
+For a baseline-only CI/build check without a maintenance task:
 
 ```powershell
 ./scripts/Validate-Maintenance.ps1 -ExpectedVersion 4.64.0
@@ -53,7 +88,12 @@ All workflows are manual or PR-triggered; there are no public-issue/comment
 triggers and no automatic Copilot assignment. The release workflow only accepts
 the configured actor, this fork, and the MSAL package, and deduplicates matching
 repository/package/version issues, including closed issues. A URL is not proof
-that a release exists: the planner must verify it before implementation.
+that a release exists: the source fetcher verifies NuGet/tag provenance before
+the planner performs its source comparison. The first release-notes-only trial
+in issue #2 / PR #3 was blocked on authenticated GitHub SAML access; use a NEW
+issue for this source-aware harness. Leave the previous attempt untouched unless
+a maintainer explicitly chooses to close it. Default Copilot tasks also load
+.github/copilot-instructions.md, which routes maintenance through the role process.
 
 Planner and reviewer profiles have read/search and read-only GitHub tools, not
 edit or shell tools. Implementer has edit, shell, and delegation tools. Tool
