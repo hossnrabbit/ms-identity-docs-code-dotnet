@@ -11,31 +11,54 @@ update that dependency or alter sample code.
    runs on push. Custom-agent and Copilot setup discovery must be verified after
    the files are on the default branch.
 2. Enable Issues and Actions in the fork. Do not enable inherited deployment or
-   publishing jobs. Keep approval required for workflows on Copilot PRs.
+   publishing jobs. Keep Require approval for workflow runs enabled under
+   Settings > Copilot > Cloud agent > Actions workflow approval. Automatic issue
+   assignment does not require disabling this setting. An administrator can opt
+   into automatic execution separately, but that allows unreviewed agent code to
+   run with each workflow's permissions and secrets. It does not approve or merge
+   a PR. Do not disable unrelated fork-contributor protections.
 3. In Settings > Secrets and variables > Actions > Variables, set repository
    variable `MAINTENANCE_DISPATCH_ACTOR` to `hossnrabbit` for manual testing. If an
    approved ADO credential later belongs to another actor, update this value.
    The release job is skipped when the variable is missing or the actor differs.
-4. Under Actions, manually run `Copilot setup steps`, then `Maintenance validation`
+4. Add `COPILOT_ASSIGNMENT_TOKEN` under Settings > Secrets and variables > Actions >
+   Secrets. Use a user PAT scoped only to this sandbox repository, with metadata
+   read and Actions, Contents, Issues, and Pull requests read/write permissions,
+   as required by GitHub's Copilot assignment API. The user must have Copilot cloud
+   agent access and the repository must allow it. A GitHub App user-to-server
+   token is another supported credential; an installation token or the built-in
+   `GITHUB_TOKEN` is not a substitute. Never commit or log tokens. Keep ADO's
+   Actions-only dispatch credential separate and unchanged.
+   An Issues-write-only PAT is being tested as a sandbox least-privilege
+   experiment; it is not yet verified to start Copilot. Do not broaden token
+   permissions automatically if assignment fails; inspect the actual error first.
+5. Under Actions, manually run `Copilot setup steps`, then `Maintenance validation`
    on `main`. Both must pass. These checks use no tenant credentials.
-5. Manually run `Release maintenance issue`. Enter Microsoft.Identity.Client, an
+6. Manually run `Release maintenance issue`. Enter Microsoft.Identity.Client, an
    exact published target version, and its official MSAL.NET GitHub release URL.
    Leave `event_key` empty for a manual test; the workflow computes it. An ADO
    dispatch may supply the same key using the coordinator contract.
-6. Inspect the issue, then use Assign to agent. Select Copilot and the
-   `sample-implementer` custom agent, with this fork and `main` as the destination.
+7. The workflow creates or reuses the issue with its built-in token, then uses the
+   separate assignment secret to start `sample-implementer` in this fork on `main`.
+   Missing credentials or a rejected assignment fail the run visibly. After fixing
+   the prerequisite, rerun the same dispatch; an open, never-assigned issue can be
+   reused for the handoff. Closed issues and issues currently or previously assigned
+   to Copilot are skipped, including assignment events on later timeline pages.
+   Replaying a release does not restart completed or manually stopped agent work.
    Copilot setup must prepare `.maintenance-evidence/manifest.json` and both local
    SDK trees before the session starts. The implementer reads that snapshot and
    supplies it to the planner. Release-note text alone is insufficient.
-7. Inspect session logs for a real planner invocation, validation, and separate
+8. Inspect session logs for a real planner invocation, validation, and separate
    reviewer invocation. Missing delegation means BLOCKED, not a successful run.
-   Inspect changes before approving workflows. A separate eligible maintainer
-   reviews the PR and a human decides whether to merge it.
+   A separate eligible maintainer reviews the PR and a human decides whether to
+   merge it, even if validation workflows run automatically.
 
-No GitHub PAT, Copilot Requests token, tenant credential, or ADO integration is
-needed for this manual path. The issue workflow uses its own GitHub Actions token
-to create issues. Permission to assign Copilot comes from your GitHub access and
-Copilot entitlement, not from that workflow token.
+The assignment API is in public preview. See GitHub's
+[API documentation](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/use-cloud-agent-via-the-api)
+and [workflow approval settings](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/configuring-agent-settings).
+No tenant credential or ADO integration is needed for a manual workflow dispatch.
+The assignment token is used only in the assignment step, not supplied to Copilot
+setup or agent prompts. Manual Assign to agent remains a maintainer recovery option.
 
 ## Validation and Limits
 
@@ -156,7 +179,7 @@ run the app in CI: device-code authentication requires a human and an approved
 test app/tenant. Build success is not proof of sign-in correctness.
 
 All workflows are manual or PR-triggered; there are no public-issue/comment
-triggers and no automatic Copilot assignment. The release workflow only accepts
+triggers. The release workflow automatically assigns eligible release issues and only accepts
 the configured actor, this fork, and the MSAL package, and deduplicates matching
 repository/package/version issues, including closed issues. A URL is not proof
 that a release exists: the source fetcher verifies NuGet/tag provenance before
@@ -182,8 +205,10 @@ Built-in Copilot review settings are managed separately in repository settings.
 Human merge requirements and required status checks are not configured by these
 files. Configure the `validate-console-cli` check and appropriate branch
 protection before treating this as production automation. Workflow execution on
-PR code has risks even after approval; these workflows use no tenant secrets and
-only read repository contents.
+PR code has risks with or without execution approval. The PR validation workflow
+uses no tenant secrets and only reads repository contents; the release workflow
+separately writes issues and uses a privileged user token for assignment. Audit
+all PR-triggered workflows before enabling automatic execution.
 
 First test an ordinary update, then a no-change case and an invalid/missing
 release-evidence case. Record actual build outcomes and human corrections. Re-run

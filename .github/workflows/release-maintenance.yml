@@ -35,7 +35,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Check out trusted assignment helper
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
       - name: Create or reuse pilot release issue
+        id: release-issue
         uses: actions/github-script@v8
         env:
           RELEASE_PACKAGE: ${{ inputs.package }}
@@ -72,6 +78,7 @@ jobs:
                 issue.user?.login === 'github-actions[bot]' && issue.body?.includes(marker));
               if (existing) {
                 core.notice(`Release issue already exists: ${existing.html_url}`);
+                core.setOutput('issue-number', existing.number);
                 return;
               }
             }
@@ -98,8 +105,22 @@ jobs:
                 'There is no unit-test suite for this sample. Interactive device-code sign-in is NOT RUN automatically.',
                 'Keep the PR inside this fork targeting main. Never merge, publish, deploy, or modify credentials.',
                 '',
-                'Maintainer: assign Copilot manually, select sample-implementer, and verify this fork/main is the target.',
-                'Review code before approving PR workflows; a second eligible maintainer must approve merging.'
+                'The release workflow assigns sample-implementer automatically in this fork, targeting main.',
+                'Human review and merge approval remain required. Workflow execution approval is controlled separately by repository administrators.'
               ].join('\n')
             });
+            core.setOutput('issue-number', issue.data.number);
             core.notice(`Created release issue: ${issue.data.html_url}`);
+      - name: Assign release issue to Copilot
+        uses: actions/github-script@v8
+        env:
+          RELEASE_ISSUE_NUMBER: ${{ steps.release-issue.outputs.issue-number }}
+          COPILOT_ASSIGNMENT_TOKEN: ${{ secrets.COPILOT_ASSIGNMENT_TOKEN }}
+        with:
+          github-token: ${{ secrets.COPILOT_ASSIGNMENT_TOKEN }}
+          script: |
+            if (!process.env.COPILOT_ASSIGNMENT_TOKEN) {
+              throw new Error('Add the COPILOT_ASSIGNMENT_TOKEN Actions secret with a user token authorized to assign Copilot.');
+            }
+            const assignIssue = require('./.github/scripts/assign-maintenance-issue.cjs');
+            await assignIssue({ github, context, core, issueNumber: Number(process.env.RELEASE_ISSUE_NUMBER) });

@@ -125,5 +125,6 @@ Include both source tag/commit identities, inspected SDK source/tests and compar
 findings, release/package evidence, applicability, before/after version, narrowly
 scoped changes, the scenario improvement matrix and discovery limitations,
 implemented/deferred decisions, build/check results, independent-review outcome, and explicit
-NOT RUN items. Human review and merge remain required. Keep approval enabled for
-workflows on Copilot PRs and inspect code/workflow changes before running them.
+NOT RUN items. Human review and merge remain required. Repository administrators
+manage Copilot workflow execution approval separately; agents must not change
+approval settings, permissions, or secrets.
