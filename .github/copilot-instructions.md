@@ -4,7 +4,16 @@ For MSAL maintenance issues, follow root AGENTS.md and the process in
 .github/agents/sample-implementer.agent.md, including when the task starts with
 the default Copilot agent. READ `.maintenance-evidence/manifest.json` and its
 setup-prepared local SDK source trees before invoking the read-only sample-planner.
-Supply the manifest's sourceDiffs paths/coverage to the planner. Setup prepares
+Use scripts/maintenance-samples.json to inventory all examples; only its five
+direct-msal-net samples are editable for Microsoft.Identity.Client releases.
+IdWeb, transitive daemon, browser MSAL, and Easy Auth samples are excluded.
+Schema-2 evidence records each original reference, resolved baseline, target,
+and status. Use the matching comparisons entry, never another sample's baseline.
+Preserve newer/setup-blocked samples and report reasons. Report PARTIAL when
+requested samples are blocked or changed samples lack passing platform builds.
+When local NuGet access/builds are unavailable or forbidden, use offline checks
+and report builds NOT RUN rather than trying restores or toolchain installs.
+Supply each comparison's sourceDiffs paths/coverage to the planner. Setup prepares
 scenario-apis.diff and sdk-client.diff for direct file reads in bounded ranges.
 NEEDS_EVIDENCE is an intermediate handoff: supply the requested patch sections
 or focused read-only git diff output and reinvoke the planner. Do not stop solely

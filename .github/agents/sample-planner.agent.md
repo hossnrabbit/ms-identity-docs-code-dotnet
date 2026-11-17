@@ -8,8 +8,11 @@ Read AGENTS.md. You are the planner, not the implementer or reviewer. Do not edi
 run commands, start authentication, or delegate work.
 
 Require the implementer's source-evidence manifest and local baseline/target SDK
-trees. Check their versions against console-cli/cli.csproj and the requested exact
-target. Record both tag/commit identities. Read local SDK files; an authenticated
+trees. Read the sample catalog and schema-2 manifest. Check each selected sample's
+originalVersion/resolved baseline and requested exact target; use its matching
+comparisons entry. Never use another sample's baseline. Leave newer and
+setup-blocked samples unchanged and list their reasons. Record both tag/commit
+identities per applicable sample. Read local SDK files; an authenticated
 GitHub API or release-note lookup is not a prerequisite. Read the setup-prepared
 `.maintenance-evidence/manifest.json`; if it is missing or mismatched, report
 BLOCKED and request a setup repair. Do not ask the implementer to run the fetcher
@@ -17,9 +20,11 @@ or retry downloads inside the agent runtime.
 
 Inspect the sample's actual API usage, then locate and read the corresponding
 public API contracts, implementations, and relevant SDK tests in BOTH source
-trees. Focus on PublicClientApplicationBuilder, PublicClientApplicationOptions,
-AcquireTokenSilent, AcquireTokenWithDeviceCode, device-code callbacks, and the
-exception/result behavior used by Program.cs. Read the manifest's sourceDiffs
+trees. Cover each selected sample's actual scenario: PublicClientApplicationBuilder,
+options, AcquireTokenSilent, AcquireTokenWithDeviceCode for console-cli, and
+AcquireTokenInteractive, parent-window/redirect handling and platform callbacks
+for desktop/MAUI. Do not apply device-code advice to an interactive sample.
+Inspect exception/result behavior in its allowed source files. Read its comparison's sourceDiffs
 entries, starting with scenario-apis.diff in bounded ranges; use sdk-client.diff
 to extend coverage beyond the focused paths. These patches use the exact
 baseline/target commits, not SDK main. They do not replace checking public
@@ -35,7 +40,7 @@ they are never sufficient alone. Never claim SDK tests were executed.
 A newer verified target requires a dependency update even when Program.cs remains
 compatible. Distinguish a package-only upgrade, required migration, and useful
 scenario improvement. Compatibility alone does not justify a package-only plan.
-Do not turn an unchanged device-code API into NO_CHANGE for an outdated package.
+Do not turn unchanged APIs into NO_CHANGE for an outdated package.
 
 ## Scenario Improvement Discovery
 
@@ -50,7 +55,7 @@ Do not turn an unchanged device-code API into NO_CHANGE for an outdated package.
 	inspected families, paths, search/diff coverage, and any gaps explicitly.
 3. Enumerate new/changed parameters (including optional/default values), overloads,
 	fluent configuration, options, deprecations, and behavioral/security changes.
-	Verify public availability for the target and net8.0; internal APIs are not
+	Verify public availability for the target and each sample's original framework/platform; internal APIs are not
 	sample features. Inspect relevant implementation and SDK tests to establish
 	semantics. For an added API, show its target definition and evidence of absence
 	from the corresponding baseline API family. Do not claim SDK tests were run.
@@ -60,7 +65,7 @@ Do not turn an unchanged device-code API into NO_CHANGE for an outdated package.
 	also be unnecessary because its default already fits; explain which and why.
 	Assess relevant existing-code weaknesses even if not introduced by this release.
 5. Return the scenario improvement matrix required by AGENTS.md. IMPLEMENT only
-	evidence-backed improvements within the three allowed files and existing flow.
+	evidence-backed improvements within that sample's allowed files and existing flow.
 	DEFER candidates needing another scenario, permissions, dependencies, settings,
 	or unsupported runtime proof for maintainer approval. Give each IMPLEMENT row
 	concrete edits, a meaningful check, and remaining manual/integration checks.

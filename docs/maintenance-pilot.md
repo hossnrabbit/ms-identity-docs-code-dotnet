@@ -1,9 +1,31 @@
-# Console CLI Maintenance Pilot
+# Multi-example MSAL.NET Maintenance Pilot
 
 This is a sandbox in `hossnrabbit/ms-identity-docs-code-dotnet`, not a rollout to
-Azure-Samples. Only `console-cli` is in scope. Its baseline is .NET 8 with a direct
-Microsoft.Identity.Client 4.64.0 dependency. Installing this harness does not
-update that dependency or alter sample code.
+Azure-Samples. The catalog in `scripts/maintenance-samples.json` covers all 13
+examples, but not all use MSAL.NET directly. Installing this harness changes no
+sample source, dependencies, frameworks, credentials, or tenant settings.
+
+## Example Inventory
+
+| Example | Existing authentication dependency | MSAL.NET release scope |
+| --- | --- | --- |
+| console-cli | Microsoft.Identity.Client 4.64.0 | Enabled; .NET 8 device code/silent |
+| console-daemon | IdWeb.TokenCache 3.1.0; transitive MSAL use | Excluded; needs an IdWeb-aware adapter |
+| desktop-winforms | Microsoft.Identity.Client 4.* | Enabled; .NET 8 Windows interactive/silent |
+| desktop-winui | Microsoft.Identity.Client 4.* | Enabled; .NET 8 WinUI interactive/silent |
+| desktop-wpf | Microsoft.Identity.Client 4.* | Enabled; .NET 8 Windows interactive/silent |
+| spa-blazor-wasm | Microsoft.Authentication.WebAssembly.Msal 8.* | Excluded; browser MSAL, not MSAL.NET |
+| web-api-azure-function | Functions SDK 4.4.0; Easy Auth | Excluded; no MSAL/IdWeb reference |
+| web-api-obo-client | IdWeb/DownstreamApi 3.1.0 | Excluded; IdWeb-owned reference |
+| web-api-obo-user | IdWeb/DownstreamApi 3.1.0 | Excluded; IdWeb-owned reference |
+| web-api | IdWeb 3.7.1; .NET 9 bearer validation | Excluded; IdWeb-owned reference |
+| web-app-aspnet | IdWeb/UI/DownstreamApi 3.8.0 | Excluded; IdWeb-owned reference |
+| web-app-blazor-server | IdWeb/UI/DownstreamApi 3.1.0 | Excluded; IdWeb-owned reference |
+| xplat-maui | Microsoft.Identity.Client 4.38.0 | Scoped; legacy .NET 6 Android/Windows, currently provenance-blocked |
+
+The five direct-reference projects are routed independently. Never add MSAL.NET
+references to excluded examples. Supporting their wrapper/browser releases
+requires separate evidence and validation adapters, not a blanket MSAL bump.
 
 ## Enable the Prototype
 
@@ -33,7 +55,8 @@ update that dependency or alter sample code.
    experiment; it is not yet verified to start Copilot. Do not broaden token
    permissions automatically if assignment fails; inspect the actual error first.
 5. Under Actions, manually run `Copilot setup steps`, then `Maintenance validation`
-   on `main`. Both must pass. These checks use no tenant credentials.
+   on `main`. Inspect each sample's setup status and all platform jobs; a green
+   static job does not prove every example built. These checks use no tenant credentials.
 6. Manually run `Release maintenance issue`. Enter Microsoft.Identity.Client, an
    exact published target version, and its official MSAL.NET GitHub release URL.
    Leave `event_key` empty for a manual test; the workflow computes it. An ADO
@@ -45,8 +68,8 @@ update that dependency or alter sample code.
    reused for the handoff. Closed issues and issues currently or previously assigned
    to Copilot are skipped, including assignment events on later timeline pages.
    Replaying a release does not restart completed or manually stopped agent work.
-   Copilot setup must prepare `.maintenance-evidence/manifest.json` and both local
-   SDK trees before the session starts. The implementer reads that snapshot and
+   Copilot setup must prepare schema-2 `.maintenance-evidence/manifest.json` and
+   the applicable baseline/target SDK trees before the session starts. The implementer reads that snapshot and
    supplies it to the planner. Release-note text alone is insufficient.
 8. Inspect session logs for a real planner invocation, validation, and separate
    reviewer invocation. Missing delegation means BLOCKED, not a successful run.
@@ -63,7 +86,8 @@ setup or agent prompts. Manual Assign to agent remains a maintainer recovery opt
 ## Validation and Limits
 
 Source acquisition runs inside `copilot-setup-steps.yml` BEFORE agent execution.
-Setup downloads both releases, verifies NuGet/tag commits, and checks source/test
+Setup resolves original references, downloads distinct applicable releases,
+verifies NuGet/tag commits, and checks source/test
 files and the manifest handoff in a separate Bash step. It writes the manifest to
 `.maintenance-evidence/manifest.json` and exports `MSAL_SOURCE_MANIFEST` as a
 convenience. The fixed repository-relative path does not depend on that environment
@@ -76,23 +100,40 @@ This is deliberately a single-target pilot, not concurrent multi-release routing
 The agent must not retry source acquisition or modify a prepared snapshot. Missing
 or mismatched evidence is SETUP_BLOCKED and needs a setup repair/new session.
 
-For a local maintainer-only source acquisition check:
-
-```powershell
-./scripts/Get-MsalSourceEvidence.ps1 -TargetVersion 4.91.1 -OutputDirectory ./.maintenance-evidence
-```
+Use the hosted setup workflow, or the optional `source_target_version` input of
+Maintenance validation, for source acquisition. Do not run local restores,
+downloads, or builds where NuGet access is unavailable or forbidden.
 
 The output directory must not already exist; the script refuses to overwrite a
-snapshot. Save the printed manifest path. The script downloads official NuGet packages for
-the sample's baseline and requested stable target, checks their repository commit
+snapshot. Use the printed manifest path. The script downloads official NuGet packages for
+each applicable baseline and requested stable target, checks their repository commit
 metadata against exact Git tags, and creates temporary source worktrees plus a
-file-level comparison manifest. It also prepares scenario-apis.diff and the broader
-sdk-client.diff from those exact commits, recording paths, path coverage, and
-SHA256 hashes in sourceDiffs. Read patches in bounded ranges; the broader patch
+file-level comparison manifest. Its schema-2 `samples` array records id, project,
+originalVersion, baselineVersion, targetVersion, and status. Its `comparisons`
+array holds one entry per distinct applicable baseline, including changedFiles
+and sourceDiffs. Each entry includes scenario-apis.diff and the broader
+sdk-client.diff from those exact commits, with paths, path coverage, and
+SHA256 hashes. Read patches in bounded ranges; the broader patch
 can be large. These are source comparisons, not exhaustive public API inventories.
 It never executes SDK code or builds the SDK.
-Only exact three-part stable versions are supported initially. A missing tag,
-missing commit metadata, provenance mismatch, or network failure blocks the task.
+Only exact three-part stable targets are supported. Original `4.*` references
+are resolved once by trusted setup using official NuGet; this is a setup-time
+snapshot, not proof of an earlier installed version. A newer resolved baseline
+is marked newer and remains unchanged rather than being downgraded. Applicable
+floating references are pinned to the exact verified target during maintenance.
+If floating resolution fails, setup blocks rather than guessing an exact baseline.
+
+A missing tag, commit metadata, provenance match, or network access for the target
+blocks setup globally. A baseline-only failure marks its samples setup-blocked,
+omits that comparison, and prohibits edits to those samples; other verified
+samples may proceed with an explicit PARTIAL result. Do not invent evidence,
+change baseline metadata, or weaken verification to clear a blocker.
+
+Observed MAUI blocker: the 4.38.0 tag resolves to
+`876737608b6cc6caaead87751ed7aa43f57738fb`, while its NuGet repository commit is
+`7d8a50263eac6dd7e52365c278774c6be7f82a10`. This harness intentionally does not
+authorize MAUI updates until a maintainer resolves that provenance discrepancy.
+It also does not install or modernize the sample's legacy .NET 6 MAUI toolchain.
 Downloads are anonymous; no GitHub API token/SAML grant is needed. Network access
 must still be permitted by the hosted environment. Temporary artifacts are not
 committed and must remain unchanged for planning, validation, and review.
@@ -110,14 +151,15 @@ comparisons on request. A planner NEEDS_EVIDENCE response is an intermediate
 handoff: the implementer supplies the requested existing patch sections or runs
 the focused read-only diff and reinvokes the planner. It must not stop merely
 because the planner cannot execute commands. The read-only planner compares
-the actual device-code/silent-token API contracts, implementation, and relevant
+each applicable sample's device-code, desktop-interactive, or mobile-interactive
+and silent-token API contracts, implementation, and relevant
 tests across BOTH release commits, not SDK main or only the final patch notes.
-A newer verified release requires a package update, even if no Program.cs changes
+A newer verified release requires a package update, even if no code changes
 are necessary. Do not mistake unchanged API usage for an already-current package.
 
 ## Scenario Improvement Discovery
 
-The planner must assess ways to improve this scenario, not merely preserve
+The planner must assess ways to improve each applicable scenario, not merely preserve
 compilable code. Discovery covers public parameters and optional/default values,
 overloads, builders/options, deprecations, and behavioral changes across the
 verified version range. Include relevant APIs NOT already called by the sample.
@@ -125,7 +167,7 @@ Review existing control flow, callback/cancellation, error handling, settings,
 and result use critically against public contracts, implementations, and tests.
 The package being current does not skip this assessment.
 
-Return a scenario improvement matrix with these fields for each candidate:
+Return a scenario improvement matrix per sample with these fields for each candidate:
 
 | Field | Required evidence |
 | --- | --- |
@@ -143,15 +185,15 @@ The reviewer independently checks coverage and candidate decisions, including
 whether useful optional parameters or other capabilities were overlooked.
 
 Implement useful, source-supported improvements within the existing scenario and
-three allowed sample files, even when compilation did not require the change.
+that sample's bounded AGENTS.md file allowlist, even when compilation did not require the change.
 Do not add explicit default arguments or use every new API just to create a diff.
 A package-only update is still valid when the completed assessment justifies it.
 New authentication scenarios, permissions, dependencies, tenant settings, or
 files remain deferred for explicit maintainer approval.
 
 Discovery and reviewer requirements are agent instructions, not an exhaustive
-API-diff engine or a machine-enforced completeness check. Existing CI still
-validates the project and build only. Hosted logs and the PR matrix must show
+API-diff engine or a machine-enforced completeness check. CI checks the catalog,
+harness guards, console build, and Windows desktop builds. Hosted logs and the PR matrix must show
 actual discovery and independent review. No new unit-test suite or runtime
 authentication automation is added by this harness change. For behavior that
 cannot be exercised, report NOT RUN and specific manual/integration checks;
@@ -159,23 +201,50 @@ never describe compilation or inspecting SDK tests as runtime proof.
 
 ## Post-change Validation
 
-After the maintenance edit, validate using that original manifest:
+Offline checks (no NuGet, SDK compilation, or sign-in):
 
 ```powershell
-./scripts/Validate-Maintenance.ps1 -ExpectedVersion 4.91.1 -EvidenceManifest ./.maintenance-evidence/manifest.json
+./scripts/Test-Maintenance.ps1
+./scripts/Validate-Maintenance.ps1 -CheckOnly
 ```
 
-For a baseline-only CI/build check without a maintenance task:
+After maintenance, check exact targets and immutable source evidence using the
+ORIGINAL manifest, not a newly generated snapshot:
 
 ```powershell
-./scripts/Validate-Maintenance.ps1 -ExpectedVersion 4.64.0
+./scripts/Validate-Maintenance.ps1 -ExpectedVersion 4.91.1 -EvidenceManifest ./.maintenance-evidence/manifest.json -CheckOnly
 ```
 
-Use the actual target version after a maintenance edit. The script checks the
-direct package reference and net8.0 target, then restores and builds Release.
-There are no automated unit tests or authentication checks in the initial pilot.
+Use the actual target version after a maintenance edit. The script checks each
+original framework expression and direct reference, plus original SDK/package
+and diff hashes when supplied. A newer or setup-blocked sample retains its
+original reference. Pass `-SampleId` to restrict a narrower issue or platform job.
+Do not use one baseline version as the expected version for every unchanged sample.
+
+On an approved hosted build runner only, the following require an actual build:
+
+```powershell
+# Linux or Windows console runner
+./scripts/Validate-Maintenance.ps1 -SampleId console-cli -BuildPlatform any -RequireAllBuilds
+# Windows runner; each desktop sample also has its own CI job
+./scripts/Validate-Maintenance.ps1 -SampleId desktop-winforms,desktop-winui,desktop-wpf -BuildPlatform windows -RequireAllBuilds
+```
+
+For maintenance validation add the exact ExpectedVersion and original
+EvidenceManifest arguments above. Default host builds omit MAUI, and Linux
+omits Windows desktop. Missing builds print NOT RUN; `-RequireAllBuilds` fails if
+any selected build is missing. `-CheckOnly` is never build evidence. MAUI requires
+a separately approved compatible Windows/.NET 6 MAUI host and explicit
+`-SampleId xplat-maui -BuildPlatform maui -RequireAllBuilds`; pass original
+evidence for a maintenance task, which remains blocked on the discrepancy above.
+There is no automated MAUI build or workload installation in this harness.
+Report per-sample builds and PARTIAL outcomes honestly. These new hosted build
+jobs have been prepared, not proven by local builds or a fresh hosted run.
+
+There are no sample unit tests or automated authentication checks. The offline
+harness regression suite is not application/authentication coverage.
 Do not run `dotnet test` and describe a no-tests result as test coverage. Do not
-run the app in CI: device-code authentication requires a human and an approved
+run the app in CI: interactive authentication requires a human and an approved
 test app/tenant. Build success is not proof of sign-in correctness.
 
 All workflows are manual or PR-triggered; there are no public-issue/comment
@@ -203,7 +272,9 @@ returns findings to the implementer; it does not post or approve GitHub reviews.
 Built-in Copilot review settings are managed separately in repository settings.
 
 Human merge requirements and required status checks are not configured by these
-files. Configure the `validate-console-cli` check and appropriate branch
+files. The existing `validate-console-cli` check is retained. Review the new
+`validate-harness`, `validate-desktop-winforms`, `validate-desktop-winui`, and
+`validate-desktop-wpf` checks and appropriate branch
 protection before treating this as production automation. Workflow execution on
 PR code has risks with or without execution approval. The PR validation workflow
 uses no tenant secrets and only reads repository contents; the release workflow

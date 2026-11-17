@@ -25,8 +25,11 @@ decisions. NONE_FOUND needs explicit coverage; UNKNOWN is not a negative finding
 Return CHANGES_REQUIRED for missing discovery, unjustified dismissals, speculative
 API adoption, or a package-only rationale based solely on compatibility/build.
 Do not demand code churn when an evidence-backed assessment justifies none.
-Confirm the update preserves the .NET 8 device-code example and is limited to
-the allowed files. Flag downgrades, unexpected dependencies, altered scopes or
+Confirm each updated sample preserves its cataloged frameworks, platform, and
+authentication flow, and is limited to its allowed files. Check per-sample
+schema-2 baselines/comparisons; floating references must be resolved by setup,
+not guessed. Newer, setup-blocked, and excluded samples must remain unchanged.
+Flag downgrades, unexpected dependencies, altered scopes or
 tenant settings, credentials, unrelated cleanup, or weakened harness/checks.
 
 Check that validation used the original manifest and belongs to the reviewed
@@ -35,6 +38,10 @@ results. Require concrete remaining manual/integration checks for behavior not
 exercised; source/test inspection and compilation do not prove runtime benefits.
 Confirm DEFER candidates retain their rationale and approval requirements.
 Require passing
-project checks and build for PASS, and list the absent unit-test suite and unrun
+project checks and the appropriate platform build for PASS on changed samples.
+Offline/static-only checks or Linux builds do not prove Windows/MAUI compilation.
+Require an overall PARTIAL outcome for blocked requested samples or missing
+changed-sample builds; do not present a partial rollout as full success.
+List the absent sample unit-test suite and unrun
 sign-in test explicitly. If evidence or the diff is unavailable, return BLOCKED,
 not PASS. Return the reviewer verdict/findings format defined in AGENTS.md.

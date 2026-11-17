@@ -14,9 +14,9 @@ permissions:
   contents: read
 
 jobs:
-  validate-console-cli:
+  validate-harness:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -26,12 +26,61 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
-      - name: Verify exact release source acquisition
+      - name: Test catalog, scope, and evidence guards offline
+        shell: pwsh
+        run: ./scripts/Test-Maintenance.ps1
+      - name: Prepare optional exact-release evidence and report blockers
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.source_target_version != '' }}
         shell: pwsh
         env:
           SOURCE_TARGET_VERSION: ${{ inputs.source_target_version }}
-        run: ./scripts/Get-MsalSourceEvidence.ps1 -TargetVersion $env:SOURCE_TARGET_VERSION
-      - name: Validate pilot project and build
+        run: |
+          $manifestPath = ./scripts/Get-MsalSourceEvidence.ps1 -TargetVersion $env:SOURCE_TARGET_VERSION
+          $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+          $manifest.samples | Select-Object id, originalVersion, baselineVersion, targetVersion, status, setupError |
+            Format-Table -Wrap | Out-String | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY
+          foreach ($sample in $manifest.samples | Where-Object status -EQ 'setup-blocked') {
+            Write-Warning "SETUP_BLOCKED $($sample.id): $($sample.setupError)"
+          }
+      - name: Report validation boundaries
         shell: pwsh
-        run: ./scripts/Validate-Maintenance.ps1
+        run: |
+          @'
+          Catalog and harness regressions cover all 13 examples; direct MSAL.NET checks cover five.
+          Console and desktop build results are separate jobs, not implied by this check.
+          MAUI build: NOT RUN. Requires a maintainer-approved Windows/.NET 6 MAUI toolchain.
+          Sample unit tests: NOT AVAILABLE. Interactive sign-in: NOT RUN for every sample.
+          '@ | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY
+  validate-console-cli:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Validate console project and require its build
+        shell: pwsh
+        run: ./scripts/Validate-Maintenance.ps1 -SampleId console-cli -BuildPlatform any -RequireAllBuilds
+  validate-desktop:
+    name: validate-${{ matrix.sample }}
+    runs-on: windows-2022
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        sample: [desktop-winforms, desktop-winui, desktop-wpf]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Validate desktop project and require its Windows build
+        shell: pwsh
+        env:
+          MAINTENANCE_SAMPLE: ${{ matrix.sample }}
+        run: ./scripts/Validate-Maintenance.ps1 -SampleId $env:MAINTENANCE_SAMPLE -BuildPlatform windows -RequireAllBuilds

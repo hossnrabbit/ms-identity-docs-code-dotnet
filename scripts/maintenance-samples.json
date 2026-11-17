@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "samples": [
+    { "id": "console-cli", "project": "console-cli/cli.csproj", "dependencyKind": "direct-msal-net", "platform": "any", "frameworks": ["net8.0"], "scenario": "device-code and silent acquisition" },
+    { "id": "console-daemon", "project": "console-daemon/Cli.csproj", "dependencyKind": "msal-net-via-idweb", "platform": "any", "frameworks": ["net8.0"], "scenario": "client credentials and IdWeb token cache" },
+    { "id": "desktop-winforms", "project": "desktop-winforms/MsalExample.csproj", "dependencyKind": "direct-msal-net", "platform": "windows", "frameworks": ["net8.0-windows"], "scenario": "desktop interactive and silent acquisition" },
+    { "id": "desktop-winui", "project": "desktop-winui/WinUIApp.csproj", "dependencyKind": "direct-msal-net", "platform": "windows", "frameworks": ["net8.0-windows10.0.17763.0"], "scenario": "WinUI interactive and silent acquisition" },
+    { "id": "desktop-wpf", "project": "desktop-wpf/MsalExample.csproj", "dependencyKind": "direct-msal-net", "platform": "windows", "frameworks": ["net8.0-windows"], "scenario": "WPF interactive and silent acquisition" },
+    { "id": "spa-blazor-wasm", "project": "spa-blazor-wasm/BlazorWasm.csproj", "dependencyKind": "browser-msal", "platform": "any", "frameworks": ["net8.0"], "scenario": "Blazor WebAssembly browser authentication" },
+    { "id": "web-api-azure-function", "project": "web-api-azure-function/Api.csproj", "dependencyKind": "easy-auth", "platform": "any", "frameworks": ["net8.0"], "scenario": "Easy Auth and incoming token scope validation; no MSAL dependency" },
+    { "id": "web-api-obo-client", "project": "web-api-obo-client/Api.csproj", "dependencyKind": "idweb", "platform": "any", "frameworks": ["net8.0"], "scenario": "IdWeb client credentials and downstream API" },
+    { "id": "web-api-obo-user", "project": "web-api-obo-user/Api.csproj", "dependencyKind": "idweb", "platform": "any", "frameworks": ["net8.0"], "scenario": "IdWeb on-behalf-of and downstream API" },
+    { "id": "web-api", "project": "web-api/Api.csproj", "dependencyKind": "idweb", "platform": "any", "frameworks": ["net9.0"], "scenario": "IdWeb incoming bearer token validation" },
+    { "id": "web-app-aspnet", "project": "web-app-aspnet/WebApp.csproj", "dependencyKind": "idweb", "platform": "any", "frameworks": ["net8.0"], "scenario": "IdWeb web app sign-in and downstream API" },
+    { "id": "web-app-blazor-server", "project": "web-app-blazor-server/BlazorServerWebApp.csproj", "dependencyKind": "idweb", "platform": "any", "frameworks": ["net8.0"], "scenario": "IdWeb Blazor Server sign-in and downstream API" },
+    { "id": "xplat-maui", "project": "xplat-maui/XPlat.csproj", "dependencyKind": "direct-msal-net", "platform": "maui", "frameworks": ["net6.0-android", "$(TargetFrameworks);net6.0-windows10.0.19041"], "scenario": "MAUI mobile and Windows interactive acquisition" }
+  ]
+}
