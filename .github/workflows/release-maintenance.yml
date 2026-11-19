@@ -1,20 +1,35 @@
 name: Release maintenance issue
 
 on:
+  push:
+    branches: [test/msal-harness-e2e]
+    paths: [.github/workflows/release-maintenance.yml]
+  schedule:
+    - cron: '37 7 * * 1-5'
   workflow_dispatch:
     inputs:
+      detect_latest:
+        description: Discover the latest stable MSAL.NET release
+        required: false
+        default: false
+        type: boolean
+      dry_run:
+        description: Report the target without creating an issue
+        required: false
+        default: false
+        type: boolean
       package:
         description: Package identifier (direct MSAL.NET samples only)
-        required: true
+        required: false
         default: Microsoft.Identity.Client
         type: string
       version:
         description: Exact published three-part stable MSAL package version
-        required: true
+        required: false
         type: string
       release_notes_url:
         description: Official MSAL.NET GitHub release URL
-        required: true
+        required: false
         type: string
       event_key:
         description: Coordinator key (leave empty for manual testing)
@@ -26,28 +41,65 @@ permissions:
   issues: write
 
 concurrency:
-  group: release-maintenance-${{ inputs.package }}-${{ inputs.version }}
+  group: release-maintenance-msal-test
   cancel-in-progress: false
 
 jobs:
   open-issue:
-    if: ${{ github.repository == 'hossnrabbit/ms-identity-docs-code-dotnet' && vars.MAINTENANCE_DISPATCH_ACTOR != '' && github.actor == vars.MAINTENANCE_DISPATCH_ACTOR }}
+    if: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && github.repository == 'hossnrabbit/ms-identity-docs-code-dotnet' && github.ref == 'refs/heads/test/msal-harness-e2e' && github.actor == 'hossnrabbit' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Check out trusted assignment helper
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: test/msal-harness-e2e
           persist-credentials: false
+      - name: Resolve release target
+        id: target
+        shell: pwsh
+        env:
+          DISCOVER_LATEST: ${{ github.event_name == 'schedule' || inputs.detect_latest }}
+          RELEASE_PACKAGE: ${{ inputs.package }}
+          RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_URL: ${{ inputs.release_notes_url }}
+          EVENT_KEY: ${{ inputs.event_key }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:DISCOVER_LATEST -eq 'true') {
+            if (($env:RELEASE_PACKAGE -and $env:RELEASE_PACKAGE -cne 'Microsoft.Identity.Client') -or
+                $env:RELEASE_VERSION -or $env:RELEASE_URL -or $env:EVENT_KEY) {
+              throw 'Discovery cannot be combined with conflicting manual release inputs.'
+            }
+            $release = ./scripts/Find-MaintenanceRelease.ps1
+            "available=$($release.updateAvailable.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+            "package=$($release.package)" >> $env:GITHUB_OUTPUT
+            "version=$($release.version)" >> $env:GITHUB_OUTPUT
+            "url=$($release.releaseUrl)" >> $env:GITHUB_OUTPUT
+            "Latest stable MSAL.NET: $($release.version); exact outdated projects: $($release.projects.Count); floating references unresolved: $($release.unresolvedProjects.Count)." >> $env:GITHUB_STEP_SUMMARY
+            foreach ($project in $release.unresolvedProjects) {
+              "Unresolved floating baseline (not an exact installed version): $project" >> $env:GITHUB_STEP_SUMMARY
+            }
+          } else {
+            if ($env:RELEASE_PACKAGE -cne 'Microsoft.Identity.Client' -or $env:RELEASE_VERSION -notmatch '^\d+\.\d+\.\d+$' -or
+                $env:RELEASE_URL -cne "https://github.com/AzureAD/microsoft-authentication-library-for-dotnet/releases/tag/$env:RELEASE_VERSION") {
+              throw 'Provide an exact stable MSAL.NET version and matching official tag URL.'
+            }
+            'available=true' >> $env:GITHUB_OUTPUT
+            "package=$env:RELEASE_PACKAGE" >> $env:GITHUB_OUTPUT
+            "version=$env:RELEASE_VERSION" >> $env:GITHUB_OUTPUT
+            "url=$env:RELEASE_URL" >> $env:GITHUB_OUTPUT
+          }
       - name: Create or reuse pilot release issue
+        if: ${{ steps.target.outputs.available == 'true' }}
         id: release-issue
         uses: actions/github-script@v8
         env:
-          RELEASE_PACKAGE: ${{ inputs.package }}
-          RELEASE_VERSION: ${{ inputs.version }}
-          RELEASE_NOTES_URL: ${{ inputs.release_notes_url }}
+          RELEASE_PACKAGE: ${{ steps.target.outputs.package }}
+          RELEASE_VERSION: ${{ steps.target.outputs.version }}
+          RELEASE_NOTES_URL: ${{ steps.target.outputs.url }}
           EVENT_KEY: ${{ inputs.event_key }}
+          DRY_RUN: ${{ inputs.dry_run }}
         with:
           script: |
             const crypto = require('node:crypto');
@@ -71,6 +123,10 @@ jobs:
               throw new Error('Release event key does not match this repository and release.');
             }
             const marker = `<!-- sample-maintenance:${expectedKey} -->`;
+            if (process.env.DRY_RUN === 'true') {
+              core.notice(`Dry run: ${packageId} ${version}; event key ${expectedKey}; no issue or assignment.`);
+              return;
+            }
             for await (const page of github.paginate.iterator(github.rest.issues.listForRepo, {
               ...context.repo, state: 'all', per_page: 100
             })) {
@@ -90,6 +146,7 @@ jobs:
                 `Evaluate all five direct MSAL.NET examples against ${packageId} ${version}: console-cli, desktop-winforms, desktop-winui, desktop-wpf, and xplat-maui.`,
                 'Read scripts/maintenance-samples.json for the complete 13-example inventory. Do not change IdWeb/transitive, browser MSAL, or Easy Auth examples or add MSAL references to them.',
                 `Official release evidence: ${evidence}`,
+                'Detection only: Copilot assignment is disabled. The release tag URL is a candidate until verified. A maintainer must approve matching setup and resolve provenance before any update. Floating references are unresolved, not proof of an outdated installed package.',
                 '',
                 'Use AGENTS.md and the sample-implementer profile with its planner and reviewer roles.',
                 'Before planning or editing, READ schema-2 .maintenance-evidence/manifest.json prepared by Copilot setup. Its target must match ' + version + '; check each originalVersion, resolved baselineVersion, status, and matching comparisons entry.',
@@ -106,24 +163,11 @@ jobs:
                 'Summarize versions, source comparison, discovery matrix and candidate dispositions, changes, actual build/per-improvement checks, independent review, and NOT RUN checks PER SAMPLE.',
                 'Use -CheckOnly when local build/NuGet access is unavailable or forbidden. Windows desktop checks run on Windows CI; MAUI requires an approved legacy toolchain. Never install workloads or modernize frameworks just to pass validation.',
                 'Report PARTIAL, not SUCCESS, when requested examples are blocked or changed samples lack passing platform builds. Static checks do not prove builds. There is no sample unit-test suite; interactive sign-in is NOT RUN automatically.',
-                'Keep the PR inside this fork targeting main. Never merge, publish, deploy, or modify credentials.',
+                'TEST FORK ONLY: keep any PR inside hossnrabbit/ms-identity-docs-code-dotnet targeting test/msal-harness-e2e, never main or upstream. Never merge, publish, deploy, or modify credentials.',
                 '',
-                'The release workflow assigns sample-implementer automatically in this fork, targeting main.',
+                'This test workflow never assigns Copilot. Supported no-PAT authentication and test-branch setup import must be verified separately.',
                 'Human review and merge approval remain required. Workflow execution approval is controlled separately by repository administrators.'
               ].join('\n')
             });
             core.setOutput('issue-number', issue.data.number);
             core.notice(`Created release issue: ${issue.data.html_url}`);
-      - name: Assign release issue to Copilot
-        uses: actions/github-script@v8
-        env:
-          RELEASE_ISSUE_NUMBER: ${{ steps.release-issue.outputs.issue-number }}
-          COPILOT_ASSIGNMENT_TOKEN: ${{ secrets.COPILOT_ASSIGNMENT_TOKEN }}
-        with:
-          github-token: ${{ secrets.COPILOT_ASSIGNMENT_TOKEN }}
-          script: |
-            if (!process.env.COPILOT_ASSIGNMENT_TOKEN) {
-              throw new Error('Add the COPILOT_ASSIGNMENT_TOKEN Actions secret with a user token authorized to assign Copilot.');
-            }
-            const assignIssue = require('./.github/scripts/assign-maintenance-issue.cjs');
-            await assignIssue({ github, context, core, issueNumber: Number(process.env.RELEASE_ISSUE_NUMBER) });

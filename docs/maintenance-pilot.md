@@ -5,6 +5,41 @@ Azure-Samples. The catalog in `scripts/maintenance-samples.json` covers all 13
 examples, but not all use MSAL.NET directly. Installing this harness changes no
 sample source, dependencies, frameworks, credentials, or tenant settings.
 
+## GitHub-Only Discovery Test
+
+Current test branch: `test/msal-harness-e2e`. This is the MSAL.NET counterpart to
+the separate IdWeb test in `hossnrabbit/active-directory-aspnetcore-webapp-openidconnect-v2`
+on `test/idweb-harness-e2e`. Neither test changes a default branch.
+
+After the branch is reviewed and published, dispatch `Release maintenance issue`
+on this test branch with `detect_latest=true` and `dry_run=true`. Leave version,
+release URL, and event key empty; package may retain `Microsoft.Identity.Client`.
+This queries only NuGet's version index and compares exact references in the five
+cataloged direct-MSAL samples. Numeric stable versions only; previews are ignored.
+Feed failures fail the job rather than masquerading as no update. No restores,
+SDK execution, source/package downloads, sign-in, or tenant credentials are needed.
+
+Floating references such as `4.*` are reported as unresolved separately, never
+treated as exact installed baselines. Discovery does not resolve them or claim
+they are outdated. When an exact reference is older, repeating with `dry_run=false`
+creates or reuses one bot-authored issue per package/version, including closed
+issues. A current or newer exact reference alone does not trigger an issue.
+If all references float, no issue is created; inspect the unresolved summary.
+The official tag URL is a candidate, not verified source evidence.
+
+There is no automatic Copilot assignment, PAT requirement, or ADO dependency in
+this test workflow. Detection is not source-update approval. Future agent work
+still requires approved no-PAT authentication, verified test-branch setup import,
+matching original evidence, provenance checks, and independent planning/review.
+Never downgrade or introduce MSAL into wrapper/browser/Easy Auth samples.
+
+The weekday 07:37 UTC cron is intentionally inactive: GitHub schedules execute
+only workflows on the default branch, and this job also requires the test ref.
+Publishing or dispatching this branch does not activate periodic execution.
+Default-branch activation and corresponding guard changes require separate
+approval. No commit, push, live feed query, issue creation, or hosted result is
+implied by local offline tests.
+
 ## Example Inventory
 
 | Example | Existing authentication dependency | MSAL.NET release scope |
@@ -27,7 +62,11 @@ The five direct-reference projects are routed independently. Never add MSAL.NET
 references to excluded examples. Supporting their wrapper/browser releases
 requires separate evidence and validation adapters, not a blanket MSAL bump.
 
-## Enable the Prototype
+## Historical Prototype Setup (Not For This Test Branch)
+
+The following describes the earlier default-branch prototype, not current
+activation instructions. Do not create a PAT, change secrets or policies, target
+`main`, or enable assignment for this test. Use the discovery procedure above.
 
 1. Review and publish these harness files to this fork's `main` branch. Nothing
    runs on push. Custom-agent and Copilot setup discovery must be verified after

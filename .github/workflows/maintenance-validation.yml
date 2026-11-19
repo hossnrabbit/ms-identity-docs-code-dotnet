@@ -8,7 +8,7 @@ on:
         required: false
         type: string
   pull_request:
-    branches: [main]
+    branches: [test/msal-harness-e2e]
 
 permissions:
   contents: read
@@ -29,6 +29,9 @@ jobs:
       - name: Test catalog, scope, and evidence guards offline
         shell: pwsh
         run: ./scripts/Test-Maintenance.ps1
+      - name: Test scheduled MSAL.NET discovery offline
+        shell: pwsh
+        run: ./scripts/Test-MaintenanceRelease.ps1
       - name: Prepare optional exact-release evidence and report blockers
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.source_target_version != '' }}
         shell: pwsh

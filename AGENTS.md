@@ -1,5 +1,10 @@
 # Sample Maintenance Pilot
 
+This checkout is an isolated discovery test on `test/msal-harness-e2e`.
+Release detection creates issues only; it never assigns Copilot or authorizes
+source edits. Do not follow historical default-branch activation instructions.
+Any later maintenance PR must target this test branch inside this fork only.
+
 This fork is a sandbox. `scripts/maintenance-samples.json` inventories all 13
 examples. Microsoft.Identity.Client releases target only its five
 `direct-msal-net` entries: console-cli, desktop-winforms, desktop-winui,
@@ -75,7 +80,7 @@ direct-package harness. Never introduce a direct MSAL reference into them.
   hosted entry point already created a draft PR, explain the no-change result
   for the maintainer to close it.
 - Keep branches and PRs inside `hossnrabbit/ms-identity-docs-code-dotnet`, targeting
-  its `main` branch. Never target the upstream Azure-Samples repository.
+  its `test/msal-harness-e2e` branch. Never target `main` or the upstream Azure-Samples repository.
 - Never merge, publish, deploy, request secrets, or start interactive sign-in.
   Do not execute the sample or provisioning scripts during automated validation.
 
