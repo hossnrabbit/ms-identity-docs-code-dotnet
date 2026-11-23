@@ -1,16 +1,19 @@
-# Sample Maintenance Pilot
+# Shared Identity Sample Maintenance
 
 This checkout is an isolated discovery test on `test/msal-harness-e2e`.
 Release detection creates issues only; it never assigns Copilot or authorizes
 source edits. Do not follow historical default-branch activation instructions.
 Any later maintenance PR must target this test branch inside this fork only.
 
-This fork is a sandbox. `scripts/maintenance-samples.json` inventories all 13
-examples. Microsoft.Identity.Client releases target only its five
-`direct-msal-net` entries: console-cli, desktop-winforms, desktop-winui,
-desktop-wpf, and xplat-maui. The daemon uses MSAL through an IdWeb dependency;
-other examples use IdWeb, browser MSAL, or Easy Auth. They are excluded from this
-direct-package harness. Never introduce a direct MSAL reference into them.
+This fork uses ONE harness for releases from either MSAL.NET or IdWeb.
+`scripts/maintenance-samples.json` inventories all 13 examples. The package
+determines the official source repository; Select-MaintenanceSamples selects
+existing references from each project's XML. Microsoft.Identity.Client selects
+the five direct clients. Microsoft.Identity.Web packages select the existing
+references in the six server samples, including console-daemon. Browser MSAL
+and Easy Auth are not MSAL.NET/IdWeb targets. Never introduce a dependency or
+interpret a transitive MSAL release as a new IdWeb package version. Code changes
+must be justified against the selected upstream's exact baseline/target sources.
 
 ## Scope and Safety
 
@@ -22,7 +25,8 @@ direct-package harness. Never introduce a direct MSAL reference into them.
   their repository commits against exact Git tags, and materializes both SDK
   source trees in `.maintenance-evidence` BEFORE agent execution.
   Before planning, READ `.maintenance-evidence/manifest.json` using file tools.
-  Require schemaVersion 2. Match each sample's project and originalVersion to
+  Require schemaVersion 2 and the requested package, official repository, and
+  exact target. Match each sample's project and originalVersion to
   its original reference, and its targetVersion to the issue. Floating `4.*`
   baselines are resolved once by setup; they are not historical-install evidence.
   Use the corresponding baselineVersion entry in comparisons and both releases.
@@ -48,8 +52,10 @@ direct-package harness. Never introduce a direct MSAL reference into them.
 - Source acquisition belongs to setup, not the agent. Do not edit the prepared
   evidence, execute downloaded SDK code/build scripts, or commit downloaded
   sources, packages, or manifest. `.maintenance-evidence` is ignored by Git.
-  The setup target defaults to 4.91.1 for this pilot; a maintainer can change the
-  `MSAL_SOURCE_TARGET_VERSION` repository Actions variable BEFORE a new session.
+  A maintainer must configure matching `MAINTENANCE_PACKAGE` and
+  `MAINTENANCE_TARGET_VERSION` repository Actions variables BEFORE a new session.
+  There is no automatic source/version fallback. Explicit setup workflow inputs
+  are for smoke tests, not proof that agent setup imported the matching evidence.
   Never treat a different prepared target as equivalent to the requested release.
 - Only update the following files for verified migrations or justified scenario
   improvements. Respect an issue's narrower subset; do not expand it silently.
@@ -58,6 +64,12 @@ direct-package harness. Never introduce a direct MSAL reference into them.
   - desktop-winui: `WinUIApp.csproj`, `MainWindow.xaml.cs`, `README.md`.
   - desktop-wpf: `MsalExample.csproj`, `MainWindow.xaml.cs`, `README.md`.
   - xplat-maui: `XPlat.csproj`, `MainPage.xaml.cs`, `Platforms/Android/MainActivity.cs`, `README.md`.
+  - For IdWeb package releases, only the selected server sample directories:
+    console-daemon, web-api-obo-client, web-api-obo-user, web-api,
+    web-app-aspnet, and web-app-blazor-server. Within a selected directory, only
+    its cataloged project, existing application `.cs`, `.cshtml`, and `.razor`
+    files, and README.md. Preserve every unrelated package reference. Do not edit
+    appsettings, launch settings, provisioning/deployment files, or credentials.
   Paths above are relative to each sample directory. Do not modify other files,
   excluded samples, the harness, workflows, test scripts, credentials, or tenant settings.
 - Do not downgrade, add unnecessary dependencies, broadly modernize the project,
@@ -139,7 +151,8 @@ From the repository root, run PowerShell 7:
 ./scripts/Validate-Maintenance.ps1 -ExpectedVersion <exact-target-version>
 ```
 
-For maintenance tasks also pass `-EvidenceManifest <original-manifest-path>`.
+For maintenance tasks also pass `-Package <requested-package>` and
+`-EvidenceManifest <original-manifest-path>`.
 For a narrower issue, pass `-SampleId` with its permitted sample IDs. The script
 verifies each sample's original frameworks, exact target, baseline-specific
 source/diff hashes, and immutable snapshots. Newer and setup-blocked samples

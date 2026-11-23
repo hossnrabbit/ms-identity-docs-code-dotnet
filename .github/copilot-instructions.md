@@ -1,12 +1,18 @@
 # Scenario Maintenance and Improvement
 
-For MSAL maintenance issues, follow root AGENTS.md and the process in
+For MSAL.NET or IdWeb maintenance issues, use ONE shared harness. Follow root AGENTS.md and the process in
 .github/agents/sample-implementer.agent.md, including when the task starts with
 the default Copilot agent. READ `.maintenance-evidence/manifest.json` and its
 setup-prepared local SDK source trees before invoking the read-only sample-planner.
-Use scripts/maintenance-samples.json to inventory all examples; only its five
-direct-msal-net samples are editable for Microsoft.Identity.Client releases.
-IdWeb, transitive daemon, browser MSAL, and Easy Auth samples are excluded.
+Use scripts/maintenance-samples.json and Select-MaintenanceSamples to select
+only existing direct references to the requested package. Microsoft.Identity.Client
+uses the five direct clients; Microsoft.Identity.Web packages use their existing
+references in the six server samples, including the daemon. Browser MSAL and
+Easy Auth remain excluded. Never introduce a dependency or turn a transitive MSAL
+release into an IdWeb bump. Preserve unrelated package references.
+Require the schema-2 package, official upstream repository, and exact target
+to match the task and the MAINTENANCE_PACKAGE/MAINTENANCE_TARGET_VERSION setup
+configuration. Pass the explicit requested -Package to Validate-Maintenance.ps1.
 Schema-2 evidence records each original reference, resolved baseline, target,
 and status. Use the matching comparisons entry, never another sample's baseline.
 Preserve newer/setup-blocked samples and report reasons. Report PARTIAL when

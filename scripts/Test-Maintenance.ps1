@@ -29,6 +29,14 @@ foreach ($sample in $selected) {
     Assert-True ($sample.versionSpec -match '^\d+\.\d+\.\d+$|^\d+\.\*$') 'Expected a supported direct reference, including exact pins after maintenance.'
 }
 Assert-True (@(Select-MsalSamples -Samples $samples -SampleId 'desktop-wpf').Count -eq 1) 'Single-sample selection failed.'
+Assert-True (@(Select-MaintenanceSamples -Samples $samples -Package 'Microsoft.Identity.Client').Count -eq 5) 'Shared MSAL selection changed.'
+$idweb = @(Select-MaintenanceSamples -Samples $samples -Package 'Microsoft.Identity.Web')
+Assert-True ($idweb.Count -gt 0 -and @($idweb | Where-Object dependencyKind -EQ 'direct-msal-net').Count -eq 0) 'Shared IdWeb routing selected MSAL-only samples.'
+Assert-True ((Get-MaintenanceSource -Package 'Microsoft.Identity.Web.UI').repository -ceq 'AzureAD/microsoft-identity-web') 'Wrong IdWeb source.'
+Assert-True ((Get-MaintenanceSource -Package 'Microsoft.Identity.Client').repository -ceq 'AzureAD/microsoft-authentication-library-for-dotnet') 'Wrong MSAL source.'
+Assert-Throws { Select-MaintenanceSamples -Samples $samples -Package 'Microsoft.Identity.Web' -SampleId 'console-cli' } '*does not directly reference*'
+Assert-Throws { Select-MaintenanceSamples -Samples $samples -Package 'Microsoft.Identity.Client' -SampleId 'web-app-aspnet' } '*not a direct MSAL.NET*'
+Assert-Throws { Get-MaintenanceSource -Package 'Microsoft.Identity.Client.Evil' } '*Unsupported identity package*'
 Assert-Throws { Select-MsalSamples -Samples $samples -SampleId 'unknown' } '*Unknown sample*'
 Assert-Throws { Select-MsalSamples -Samples $samples -SampleId 'console-daemon' } '*not a direct MSAL.NET*'
 Assert-Throws { Select-MsalSamples -Samples $samples -SampleId 'spa-blazor-wasm' } '*not a direct MSAL.NET*'
@@ -38,13 +46,13 @@ Assert-Throws { Resolve-MsalBaseline -VersionSpec '../4.*' } '*Unsupported float
 & (Join-Path $PSScriptRoot 'Validate-Maintenance.ps1') -CheckOnly
 Assert-Throws { & (Join-Path $PSScriptRoot 'Validate-Maintenance.ps1') -CheckOnly -RequireAllBuilds } '*Required builds NOT RUN*'
 Assert-Throws { & (Join-Path $PSScriptRoot 'Validate-Maintenance.ps1') -CheckOnly -ExpectedVersion '0.0.1' -SampleId 'console-cli' } '*Expected console-cli*'
-Assert-Throws { & (Join-Path $PSScriptRoot 'Get-MsalSourceEvidence.ps1') -TargetVersion '4.91.1' -SampleId 'spa-blazor-wasm' } '*not a direct MSAL.NET*'
+Assert-Throws { & (Join-Path $PSScriptRoot 'Get-MaintenanceSourceEvidence.ps1') -TargetVersion '4.91.1' -SampleId 'spa-blazor-wasm' } '*not a direct MSAL.NET*'
 
 $scratch = Join-Path ([IO.Path]::GetTempPath()) ('maintenance-tests-' + [guid]::NewGuid())
 New-Item -ItemType Directory -Path $scratch | Out-Null
 try {
     $catalogPath = Join-Path $scratch 'samples.json'
-    Assert-Throws { & (Join-Path $PSScriptRoot 'Get-MsalSourceEvidence.ps1') -TargetVersion '4.91.1' -SampleId 'console-cli' -OutputDirectory $scratch } '*already exists*'
+    Assert-Throws { & (Join-Path $PSScriptRoot 'Get-MaintenanceSourceEvidence.ps1') -TargetVersion '4.91.1' -SampleId 'console-cli' -OutputDirectory $scratch } '*already exists*'
     $manifestPath = Join-Path $scratch 'manifest.json'
     $sourcePath = Join-Path $scratch 'sdk'
     $maui = $selected | Where-Object id -EQ 'xplat-maui'
@@ -131,6 +139,32 @@ try {
     $diffs[1].sha256 = 'invalid-hash'
     $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifestPath
     Assert-Throws { & (Join-Path $PSScriptRoot 'Validate-Maintenance.ps1') -ExpectedVersion $console.versionSpec -EvidenceManifest $manifestPath -CheckOnly } '*Prepared source comparison changed*'
+    $webSample = $idweb[0]
+    & git -C $sourcePath tag $webSample.versionSpec
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot tag IdWeb source fixture.' }
+    $webPackagePath = Join-Path $scratch "$($webSample.versionSpec).nupkg"
+    'test-only IdWeb package fixture' | Set-Content -LiteralPath $webPackagePath
+    $manifest.repository = 'https://github.com/AzureAD/microsoft-identity-web.git'
+    $manifest['package'] = 'Microsoft.Identity.Web'
+    $manifest.targetVersion = $webSample.versionSpec
+    $targetRelease.version = $webSample.versionSpec
+    $targetRelease.tag = $webSample.versionSpec
+    $targetRelease.packageSha256 = (Get-FileHash -LiteralPath $webPackagePath -Algorithm SHA256).Hash
+    $manifest.releases = @($targetRelease)
+    $manifest.samples = @([ordered]@{
+        id = $webSample.id; project = $webSample.project
+        originalVersion = $webSample.versionSpec; baselineVersion = $webSample.versionSpec
+        targetVersion = $webSample.versionSpec; status = 'current'
+    })
+    $diffs[1].sha256 = (Get-FileHash -LiteralPath $diffs[1].path -Algorithm SHA256).Hash
+    $manifest.comparisons = @([ordered]@{
+        baselineVersion = $webSample.versionSpec; targetVersion = $webSample.versionSpec; sourceDiffs = $diffs
+    })
+    $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifestPath
+    & (Join-Path $PSScriptRoot 'Validate-Maintenance.ps1') -Package 'Microsoft.Identity.Web' -ExpectedVersion $webSample.versionSpec -EvidenceManifest $manifestPath -CheckOnly
+    Assert-Throws { & (Join-Path $PSScriptRoot 'Validate-Maintenance.ps1') -Package 'Microsoft.Identity.Web.UI' -ExpectedVersion $webSample.versionSpec -EvidenceManifest $manifestPath -CheckOnly } '*match the exact target and official repository*'
+    Assert-Throws { & (Join-Path $PSScriptRoot 'Validate-Maintenance.ps1') -ExpectedVersion $webSample.versionSpec -EvidenceManifest $manifestPath -CheckOnly } '*match the exact target and official repository*'
+    Assert-Throws { & (Join-Path $PSScriptRoot 'Get-MaintenanceSourceEvidence.ps1') -Package 'Microsoft.Identity.Web' -TargetVersion $webSample.versionSpec -OutputDirectory $scratch } '*already exists*'
     $catalog = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'maintenance-samples.json') -Raw | ConvertFrom-Json
     $catalog.samples = @($catalog.samples) + $catalog.samples[0]
     $catalog | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $catalogPath

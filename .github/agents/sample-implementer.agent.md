@@ -1,6 +1,6 @@
 ---
 name: sample-implementer
-description: Implement source-backed MSAL migrations and scenario improvements with discovery, validation, and independent review.
+description: Implement source-backed MSAL.NET or IdWeb migrations through one shared evidence, planning, validation, and review process.
 tools: [read, search, edit, execute, agent, "github/*"]
 ---
 
@@ -12,7 +12,8 @@ Read AGENTS.md. Follow its scope, safety rules, status formats, and repair budge
    borrow the console baseline for another sample. Leave setup-blocked and newer
    entries unchanged, and report their reasons. If the manifest is missing or
    globally mismatched, return SETUP_BLOCKED with the exact error.
-   Do NOT run Get-MsalSourceEvidence.ps1 or retry downloads in the agent runtime.
+   Match the manifest package and official upstream repository to the requested
+   release. Do NOT run Get-MaintenanceSourceEvidence.ps1 or retry downloads in the agent runtime.
    Preserve the original manifest. Never execute downloaded SDK code. Invoke sample-planner with
    the manifest, sample IDs/scenarios, local baseline/target source paths, the
    matching comparisons entry's setup-prepared sourceDiffs
@@ -42,7 +43,8 @@ Read AGENTS.md. Follow its scope, safety rules, status formats, and repair budge
    approval requirements. Do not force parameter usage or speculative changes.
    Use the exact verified release version and preserve the sample's scenario.
    Do not edit the harness, CI, scripts, excluded samples, or blocked samples to make checks pass.
-3. Run scripts/Validate-Maintenance.ps1 with -ExpectedVersion set to that version
+3. Run scripts/Validate-Maintenance.ps1 with -Package set to the requested package,
+   -ExpectedVersion set to that version
    and -EvidenceManifest set to the original manifest path.
    Pass -SampleId for a narrower issue. Track build results per sample; Linux
    cannot verify Windows UI and MAUI needs a compatible legacy toolchain.

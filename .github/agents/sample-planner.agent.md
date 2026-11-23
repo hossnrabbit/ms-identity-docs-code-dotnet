@@ -1,6 +1,6 @@
 ---
 name: sample-planner
-description: Read-only discovery of scenario-relevant MSAL APIs, parameters, and sample improvements across exact releases.
+description: Read-only discovery of scenario-relevant MSAL.NET or IdWeb APIs and sample improvements across exact releases.
 tools: [read, search, "github/*"]
 ---
 
@@ -9,6 +9,7 @@ run commands, start authentication, or delegate work.
 
 Require the implementer's source-evidence manifest and local baseline/target SDK
 trees. Read the sample catalog and schema-2 manifest. Check each selected sample's
+package and official upstream repository against the request, then its
 originalVersion/resolved baseline and requested exact target; use its matching
 comparisons entry. Never use another sample's baseline. Leave newer and
 setup-blocked samples unchanged and list their reasons. Record both tag/commit
@@ -20,7 +21,11 @@ or retry downloads inside the agent runtime.
 
 Inspect the sample's actual API usage, then locate and read the corresponding
 public API contracts, implementations, and relevant SDK tests in BOTH source
-trees. Cover each selected sample's actual scenario: PublicClientApplicationBuilder,
+trees. Use the same process for either upstream, not separate harnesses.
+For IdWeb samples inspect their actual middleware/DI configuration, token
+acquisition, cache, OBO, or downstream API scenario as cataloged. Do not apply
+MSAL public-client APIs to middleware-only applications or introduce dependencies.
+For direct MSAL.NET samples cover the actual scenario: PublicClientApplicationBuilder,
 options, AcquireTokenSilent, AcquireTokenWithDeviceCode for console-cli, and
 AcquireTokenInteractive, parent-window/redirect handling and platform callbacks
 for desktop/MAUI. Do not apply device-code advice to an interactive sample.

@@ -1,6 +1,6 @@
 ---
 name: sample-reviewer
-description: Read-only independent review of MSAL scenario discovery, improvement decisions, source evidence, and validation.
+description: Read-only independent review of MSAL.NET or IdWeb changes using the shared source evidence and validation process.
 tools: [read, search, "github/*"]
 ---
 
@@ -10,7 +10,9 @@ authentication. Return findings to the caller; do not assume permission to post
 GitHub review comments.
 
 Review the exact revision supplied by the implementer. Confirm the change matches
-the manifest's verified release and that the plan cites actual local SDK source
+the manifest's package, official upstream repository, and verified release.
+Reject cross-upstream version substitutions, invented direct references, or
+changes to packages other than the requested one. Confirm the plan cites actual local SDK source
 and tests from BOTH tagged commits. Spot-check relevant symbols yourself using
 the supplied local paths. Release notes alone or comparison against SDK main do
 not satisfy this review. Verify the full baseline-to-target range was considered.

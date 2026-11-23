@@ -2,6 +2,15 @@ name: Copilot setup steps
 
 on:
   workflow_dispatch:
+    inputs:
+      package:
+        description: Existing MSAL.NET or IdWeb package to prepare
+        required: true
+        type: string
+      target_version:
+        description: Exact stable target package version
+        required: true
+        type: string
   pull_request:
     paths:
       - .github/workflows/copilot-setup-steps.yml
@@ -19,30 +28,42 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: |
+            8.0.x
+            9.0.x
       - name: Check complete catalog and offline harness guards
         shell: pwsh
         run: ./scripts/Test-Maintenance.ps1
       - name: Prepare verified SDK source before agent execution
         shell: pwsh
         env:
-          MSAL_SOURCE_TARGET_VERSION: ${{ vars.MSAL_SOURCE_TARGET_VERSION || '4.91.1' }}
+          SOURCE_PACKAGE: ${{ inputs.package || vars.MAINTENANCE_PACKAGE }}
+          SOURCE_TARGET_VERSION: ${{ inputs.target_version || vars.MAINTENANCE_TARGET_VERSION }}
         run: |
-          $manifestPath = ./scripts/Get-MsalSourceEvidence.ps1 `
-            -TargetVersion $env:MSAL_SOURCE_TARGET_VERSION `
+          $ErrorActionPreference = 'Stop'
+          if (!$env:SOURCE_PACKAGE -or !$env:SOURCE_TARGET_VERSION) {
+            throw 'SETUP_BLOCKED: configure matching MAINTENANCE_PACKAGE and MAINTENANCE_TARGET_VERSION before an agent session, or supply both workflow inputs for a setup smoke test.'
+          }
+          . ./scripts/Maintenance.Common.ps1
+          $source = Get-MaintenanceSource -Package $env:SOURCE_PACKAGE
+          $selected = @(Select-MaintenanceSamples -Samples @(Get-MaintenanceSamples) -Package $env:SOURCE_PACKAGE)
+          $manifestPath = ./scripts/Get-MaintenanceSourceEvidence.ps1 `
+            -Package $env:SOURCE_PACKAGE `
+            -TargetVersion $env:SOURCE_TARGET_VERSION `
             -OutputDirectory (Join-Path $env:GITHUB_WORKSPACE '.maintenance-evidence')
           $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-          if ($manifest.schemaVersion -ne 2 -or $manifest.samples.Count -ne 5) {
-            throw 'Expected schema-2 source setup for all five direct MSAL.NET samples.'
+          if ($manifest.schemaVersion -ne 2 -or $manifest.package -cne $env:SOURCE_PACKAGE -or
+              $manifest.repository -cne $source.repositoryUrl -or $manifest.samples.Count -ne $selected.Count) {
+            throw 'Expected matching schema-2 package, upstream, and selected samples.'
           }
           foreach ($release in $manifest.releases) {
-            if (!(Test-Path (Join-Path $release.sourcePath 'src/client')) -or
+            if (!(Test-Path (Join-Path $release.sourcePath 'src')) -or
                 !(Test-Path (Join-Path $release.sourcePath 'tests'))) {
               throw 'SDK source/test trees are missing after setup.'
             }
-            Write-Host "Prepared MSAL $($release.version), commit $($release.commit): $($release.sourcePath)"
+            Write-Host "Prepared $($manifest.package) $($release.version), commit $($release.commit): $($release.sourcePath)"
           }
-          "MSAL_SOURCE_MANIFEST=$manifestPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "MAINTENANCE_SOURCE_MANIFEST=$manifestPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "Prepared source evidence: $manifestPath" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
           $manifest.samples | Select-Object id, originalVersion, baselineVersion, targetVersion, status, setupError |
             Format-Table -Wrap | Out-String | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY
@@ -55,7 +76,5 @@ jobs:
         shell: bash
         run: |
           test -s .maintenance-evidence/manifest.json
-          test -s "$MSAL_SOURCE_MANIFEST"
+          test -s "$MAINTENANCE_SOURCE_MANIFEST"
           git check-ignore --quiet .maintenance-evidence/manifest.json
-      - name: Restore console dependencies only (desktop and MAUI require platform hosts)
-        run: dotnet restore console-cli/cli.csproj --verbosity minimal

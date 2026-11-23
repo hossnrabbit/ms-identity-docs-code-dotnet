@@ -2,6 +2,7 @@
 param(
     [ValidatePattern('^\d+\.\d+\.\d+$')]
     [string] $ExpectedVersion,
+    [string] $Package = 'Microsoft.Identity.Client',
     [string] $EvidenceManifest,
     [string[]] $SampleId,
     [ValidateSet('host', 'any', 'windows', 'maui', 'all')]
@@ -15,6 +16,7 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Maintenance.Common.ps1')
 $repositoryRoot = Split-Path $PSScriptRoot -Parent
 $samples = @(Get-MaintenanceSamples)
+$source = Get-MaintenanceSource -Package $Package
 $evidence = $null
 $blockedSamples = @{}
 
@@ -22,7 +24,9 @@ if ($EvidenceManifest) {
     if (!$ExpectedVersion) { throw 'Evidence validation requires an exact ExpectedVersion.' }
     $evidence = Get-Content -LiteralPath $EvidenceManifest -Raw | ConvertFrom-Json
     if ($evidence.schemaVersion -ne 2 -or $evidence.targetVersion -cne $ExpectedVersion -or
-        $evidence.repository -cne 'https://github.com/AzureAD/microsoft-authentication-library-for-dotnet.git') {
+        $evidence.repository -cne $source.repositoryUrl -or
+        ($evidence.PSObject.Properties.Name -contains 'package' -and $evidence.package -cne $Package) -or
+        ($Package -cne 'Microsoft.Identity.Client' -and $evidence.PSObject.Properties.Name -notcontains 'package')) {
         throw 'Source evidence must use schema 2 and match the exact target and official repository.'
     }
     if (@($evidence.releases | Where-Object version -CEQ $ExpectedVersion).Count -ne 1) {
@@ -53,9 +57,9 @@ if ($EvidenceManifest) {
     Write-Host 'PASS: original source/package snapshots and tag identities are unchanged.'
 }
 
-$selected = @(Select-MsalSamples -Samples $samples -SampleId $SampleId)
-foreach ($sample in $samples | Where-Object dependencyKind -NE 'direct-msal-net') {
-    Write-Host "NOT APPLICABLE to direct MSAL.NET updates: $($sample.id) ($($sample.dependencyKind))."
+$selected = @(Select-MaintenanceSamples -Samples $samples -Package $Package -SampleId $SampleId)
+foreach ($sample in $samples | Where-Object { $_.id -cnotin @($selected.id) }) {
+    Write-Host "NOT APPLICABLE to $Package updates: $($sample.id) ($($sample.dependencyKind))."
 }
 foreach ($sample in $selected) {
     $expected = $ExpectedVersion
@@ -109,7 +113,7 @@ foreach ($sample in $selected) {
         }
     }
     if ($expected -and $sample.versionSpec -cne $expected) {
-        throw "Expected $($sample.id) MSAL reference $expected but found $($sample.versionSpec)."
+        throw "Expected $($sample.id) $Package reference $expected but found $($sample.versionSpec)."
     }
 }
 
@@ -135,7 +139,7 @@ foreach ($sample in $selected) {
     }
     $projectPath = Join-Path $repositoryRoot $sample.project
     $properties = if ($sample.platform -eq 'windows') { @('-p:Platform=x64') } else { @() }
-    Write-Host "Validating $($sample.id) with MSAL reference $($sample.versionSpec)."
+    Write-Host "Validating $($sample.id) with $Package reference $($sample.versionSpec)."
     & dotnet restore $projectPath --verbosity minimal @properties
     if ($LASTEXITCODE -ne 0) { throw "Sample restore failed: $($sample.id)." }
     & dotnet build $projectPath --configuration Release --no-restore --verbosity minimal @properties

@@ -3,8 +3,13 @@ name: Maintenance validation
 on:
   workflow_dispatch:
     inputs:
+      source_package:
+        description: Existing MSAL.NET or IdWeb package for optional source smoke test
+        required: false
+        default: Microsoft.Identity.Client
+        type: string
       source_target_version:
-        description: Optional exact stable MSAL version for source-fetch smoke test
+        description: Optional exact stable package version for source-fetch smoke test
         required: false
         type: string
   pull_request:
@@ -29,16 +34,17 @@ jobs:
       - name: Test catalog, scope, and evidence guards offline
         shell: pwsh
         run: ./scripts/Test-Maintenance.ps1
-      - name: Test scheduled MSAL.NET discovery offline
+      - name: Test shared MSAL.NET and IdWeb discovery offline
         shell: pwsh
         run: ./scripts/Test-MaintenanceRelease.ps1
       - name: Prepare optional exact-release evidence and report blockers
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.source_target_version != '' }}
         shell: pwsh
         env:
+          SOURCE_PACKAGE: ${{ inputs.source_package }}
           SOURCE_TARGET_VERSION: ${{ inputs.source_target_version }}
         run: |
-          $manifestPath = ./scripts/Get-MsalSourceEvidence.ps1 -TargetVersion $env:SOURCE_TARGET_VERSION
+          $manifestPath = ./scripts/Get-MaintenanceSourceEvidence.ps1 -Package $env:SOURCE_PACKAGE -TargetVersion $env:SOURCE_TARGET_VERSION
           $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
           $manifest.samples | Select-Object id, originalVersion, baselineVersion, targetVersion, status, setupError |
             Format-Table -Wrap | Out-String | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY
@@ -49,7 +55,8 @@ jobs:
         shell: pwsh
         run: |
           @'
-          Catalog and harness regressions cover all 13 examples; direct MSAL.NET checks cover five.
+          Shared harness regressions cover both upstreams and all 13 cataloged examples.
+          MSAL.NET targets five direct clients; IdWeb targets existing references in six server samples.
           Console and desktop build results are separate jobs, not implied by this check.
           MAUI build: NOT RUN. Requires a maintainer-approved Windows/.NET 6 MAUI toolchain.
           Sample unit tests: NOT AVAILABLE. Interactive sign-in: NOT RUN for every sample.
@@ -67,6 +74,32 @@ jobs:
       - name: Validate console project and require its build
         shell: pwsh
         run: ./scripts/Validate-Maintenance.ps1 -SampleId console-cli -BuildPlatform any -RequireAllBuilds
+  validate-idweb:
+    name: validate-${{ matrix.sample }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        sample: [console-daemon, web-api-obo-client, web-api-obo-user, web-api, web-app-aspnet, web-app-blazor-server]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+      - name: Validate selected IdWeb sample and require its build
+        shell: pwsh
+        env:
+          MAINTENANCE_SAMPLE: ${{ matrix.sample }}
+        run: |
+          . ./scripts/Maintenance.Common.ps1
+          $sample = Get-MaintenanceSamples | Where-Object id -CEQ $env:MAINTENANCE_SAMPLE
+          $package = $sample.references[0].package
+          ./scripts/Validate-Maintenance.ps1 -Package $package -SampleId $sample.id -BuildPlatform any -RequireAllBuilds
   validate-desktop:
     name: validate-${{ matrix.sample }}
     runs-on: windows-2022

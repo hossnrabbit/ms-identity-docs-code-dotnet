@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       detect_latest:
-        description: Discover the latest stable MSAL.NET release
+        description: Discover stable releases from both MSAL.NET and IdWeb
         required: false
         default: false
         type: boolean
@@ -19,16 +19,15 @@ on:
         default: false
         type: boolean
       package:
-        description: Package identifier (direct MSAL.NET samples only)
+        description: Existing identity package (empty scans both upstreams)
         required: false
-        default: Microsoft.Identity.Client
         type: string
       version:
-        description: Exact published three-part stable MSAL package version
+        description: Exact published three-part stable package version
         required: false
         type: string
       release_notes_url:
-        description: Official MSAL.NET GitHub release URL
+        description: Exact official MSAL.NET or IdWeb release tag URL
         required: false
         type: string
       event_key:
@@ -41,14 +40,18 @@ permissions:
   issues: write
 
 concurrency:
-  group: release-maintenance-msal-test
+  group: release-maintenance-test
   cancel-in-progress: false
 
 jobs:
-  open-issue:
+  resolve:
     if: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && github.repository == 'hossnrabbit/ms-identity-docs-code-dotnet' && github.ref == 'refs/heads/test/msal-harness-e2e' && github.actor == 'hossnrabbit' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      targets: ${{ steps.target.outputs.targets }}
     steps:
       - name: Check out trusted assignment helper
         uses: actions/checkout@v4
@@ -66,38 +69,56 @@ jobs:
           EVENT_KEY: ${{ inputs.event_key }}
         run: |
           $ErrorActionPreference = 'Stop'
+          . ./scripts/Maintenance.Common.ps1
           if ($env:DISCOVER_LATEST -eq 'true') {
-            if (($env:RELEASE_PACKAGE -and $env:RELEASE_PACKAGE -cne 'Microsoft.Identity.Client') -or
-                $env:RELEASE_VERSION -or $env:RELEASE_URL -or $env:EVENT_KEY) {
+            if ($env:RELEASE_VERSION -or $env:RELEASE_URL -or $env:EVENT_KEY) {
               throw 'Discovery cannot be combined with conflicting manual release inputs.'
             }
-            $release = ./scripts/Find-MaintenanceRelease.ps1
-            "available=$($release.updateAvailable.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
-            "package=$($release.package)" >> $env:GITHUB_OUTPUT
-            "version=$($release.version)" >> $env:GITHUB_OUTPUT
-            "url=$($release.releaseUrl)" >> $env:GITHUB_OUTPUT
-            "Latest stable MSAL.NET: $($release.version); exact outdated projects: $($release.projects.Count); floating references unresolved: $($release.unresolvedProjects.Count)." >> $env:GITHUB_STEP_SUMMARY
-            foreach ($project in $release.unresolvedProjects) {
-              "Unresolved floating baseline (not an exact installed version): $project" >> $env:GITHUB_STEP_SUMMARY
+            $releases = @(./scripts/Find-MaintenanceRelease.ps1 -Package $env:RELEASE_PACKAGE)
+            $targets = @($releases | Where-Object updateAvailable)
+            foreach ($release in $releases) {
+              "Latest stable $($release.package): $($release.version); upstream: $($release.repository); exact outdated projects: $($release.projects.Count); floating references unresolved: $($release.unresolvedProjects.Count)." >> $env:GITHUB_STEP_SUMMARY
+              foreach ($project in $release.unresolvedProjects) {
+                "Unresolved floating baseline (not an exact installed version): $project" >> $env:GITHUB_STEP_SUMMARY
+              }
             }
           } else {
-            if ($env:RELEASE_PACKAGE -cne 'Microsoft.Identity.Client' -or $env:RELEASE_VERSION -notmatch '^\d+\.\d+\.\d+$' -or
-                $env:RELEASE_URL -cne "https://github.com/AzureAD/microsoft-authentication-library-for-dotnet/releases/tag/$env:RELEASE_VERSION") {
-              throw 'Provide an exact stable MSAL.NET version and matching official tag URL.'
+            $source = Get-MaintenanceSource -Package $env:RELEASE_PACKAGE
+            $selection = @(Select-MaintenanceSamples -Samples @(Get-MaintenanceSamples) -Package $env:RELEASE_PACKAGE)
+            if ($env:RELEASE_VERSION -notmatch '^\d+\.\d+\.\d+$' -or
+                $env:RELEASE_URL -cne ($source.releaseBaseUrl + $env:RELEASE_VERSION)) {
+              throw 'Provide an existing identity package, exact stable version, and matching official tag URL.'
             }
-            'available=true' >> $env:GITHUB_OUTPUT
-            "package=$env:RELEASE_PACKAGE" >> $env:GITHUB_OUTPUT
-            "version=$env:RELEASE_VERSION" >> $env:GITHUB_OUTPUT
-            "url=$env:RELEASE_URL" >> $env:GITHUB_OUTPUT
+            $targets = @([pscustomobject]@{
+              package = $env:RELEASE_PACKAGE
+              version = $env:RELEASE_VERSION
+              repository = $source.repository
+              releaseUrl = $env:RELEASE_URL
+            })
           }
+          'targets=' + (ConvertTo-Json -InputObject @($targets) -Compress -Depth 6) >> $env:GITHUB_OUTPUT
+  open-issue:
+    needs: resolve
+    if: ${{ needs.resolve.outputs.targets != '[]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        release: ${{ fromJSON(needs.resolve.outputs.targets) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: test/msal-harness-e2e
+          persist-credentials: false
       - name: Create or reuse pilot release issue
-        if: ${{ steps.target.outputs.available == 'true' }}
         id: release-issue
         uses: actions/github-script@v8
         env:
-          RELEASE_PACKAGE: ${{ steps.target.outputs.package }}
-          RELEASE_VERSION: ${{ steps.target.outputs.version }}
-          RELEASE_NOTES_URL: ${{ steps.target.outputs.url }}
+          RELEASE_PACKAGE: ${{ matrix.release.package }}
+          RELEASE_VERSION: ${{ matrix.release.version }}
+          RELEASE_NOTES_URL: ${{ matrix.release.releaseUrl }}
           EVENT_KEY: ${{ inputs.event_key }}
           DRY_RUN: ${{ inputs.dry_run }}
         with:
@@ -106,15 +127,16 @@ jobs:
             const packageId = process.env.RELEASE_PACKAGE;
             const version = process.env.RELEASE_VERSION;
             const evidence = process.env.RELEASE_NOTES_URL;
-            if (packageId !== 'Microsoft.Identity.Client' ||
+            const upstream = packageId === 'Microsoft.Identity.Client'
+              ? 'AzureAD/microsoft-authentication-library-for-dotnet'
+              : /^Microsoft\.Identity\.Web(?:\.[A-Za-z0-9]+)*$/.test(packageId)
+                ? 'AzureAD/microsoft-identity-web' : null;
+            if (!upstream ||
                 !/^\d+\.\d+\.\d+$/.test(version)) {
-              throw new Error('The harness requires Microsoft.Identity.Client and an exact three-part stable version.');
+              throw new Error('The harness requires a supported identity package and exact stable version.');
             }
-            const releaseUrl = new URL(evidence);
-            if (releaseUrl.protocol !== 'https:' || releaseUrl.hostname !== 'github.com' ||
-                !releaseUrl.pathname.startsWith('/AzureAD/microsoft-authentication-library-for-dotnet/releases/') ||
-                releaseUrl.username || releaseUrl.password || /\s/.test(evidence)) {
-              throw new Error('Provide an official MSAL.NET HTTPS release URL without credentials or whitespace.');
+            if (evidence !== `https://github.com/${upstream}/releases/tag/${version}`) {
+              throw new Error('Release URL must match the selected package upstream and exact version.');
             }
             const repository = `${context.repo.owner}/${context.repo.repo}`.toLowerCase();
             const expectedKey = crypto.createHash('sha256')
@@ -143,13 +165,13 @@ jobs:
               title: `Pilot: evaluate ${packageId} ${version} in direct-reference samples`,
               body: [
                 marker,
-                `Evaluate all five direct MSAL.NET examples against ${packageId} ${version}: console-cli, desktop-winforms, desktop-winui, desktop-wpf, and xplat-maui.`,
-                'Read scripts/maintenance-samples.json for the complete 13-example inventory. Do not change IdWeb/transitive, browser MSAL, or Easy Auth examples or add MSAL references to them.',
+                `Evaluate ${packageId} ${version} from ${upstream} using the shared sample harness.`,
+                'Read scripts/maintenance-samples.json and select only existing direct references to this package using Select-MaintenanceSamples. Never introduce a dependency or turn an MSAL release into an IdWeb version bump.',
                 `Official release evidence: ${evidence}`,
                 'Detection only: Copilot assignment is disabled. The release tag URL is a candidate until verified. A maintainer must approve matching setup and resolve provenance before any update. Floating references are unresolved, not proof of an outdated installed package.',
                 '',
                 'Use AGENTS.md and the sample-implementer profile with its planner and reviewer roles.',
-                'Before planning or editing, READ schema-2 .maintenance-evidence/manifest.json prepared by Copilot setup. Its target must match ' + version + '; check each originalVersion, resolved baselineVersion, status, and matching comparisons entry.',
+                `Before planning or editing, READ schema-2 .maintenance-evidence/manifest.json prepared by Copilot setup. Its package must match ${packageId}, repository must match https://github.com/${upstream}.git, and target must match ${version}; check each originalVersion, resolved baselineVersion, status, and matching comparisons entry.`,
                 'Use the original manifest and BOTH exact-release SDK source trees for each applicable baseline to compare public APIs, implementation, and tests across the full version range. Never borrow another sample baseline. Release notes alone are insufficient.',
                 'Leave newer and setup-blocked samples completely unchanged and report their reasons. Floating references are resolved once by setup, not evidence of a historical install. Pin only applicable references to the exact target; never downgrade.',
                 'Discover scenario-relevant additions beyond current calls: optional/default parameters, overloads, builders/options, deprecations, and behavioral changes. Critically assess current sample code.',
@@ -159,7 +181,7 @@ jobs:
                 'Implement justified improvements within each existing scenario and its AGENTS.md file allowlist, even when old calls compile. Preserve original frameworks and platform settings. Defer new scenarios, permissions, dependencies, or settings for maintainer approval; do not force API adoption.',
                 'Only after discovery, if no justified scoped edit remains, report NO_CHANGE with evidence; do not intentionally create an empty PR. An already-current package does not skip discovery.',
                 'A newer verified release requires a dependency update. A package-only update must explain why no code improvement is justified; compatibility alone is insufficient.',
-                'Run scripts/Validate-Maintenance.ps1 with -ExpectedVersion set to the target version and -EvidenceManifest set to the original manifest path.',
+                `Run scripts/Validate-Maintenance.ps1 -Package ${packageId} with -ExpectedVersion set to the target version and -EvidenceManifest set to the original manifest path.`,
                 'Summarize versions, source comparison, discovery matrix and candidate dispositions, changes, actual build/per-improvement checks, independent review, and NOT RUN checks PER SAMPLE.',
                 'Use -CheckOnly when local build/NuGet access is unavailable or forbidden. Windows desktop checks run on Windows CI; MAUI requires an approved legacy toolchain. Never install workloads or modernize frameworks just to pass validation.',
                 'Report PARTIAL, not SUCCESS, when requested examples are blocked or changed samples lack passing platform builds. Static checks do not prove builds. There is no sample unit-test suite; interactive sign-in is NOT RUN automatically.',

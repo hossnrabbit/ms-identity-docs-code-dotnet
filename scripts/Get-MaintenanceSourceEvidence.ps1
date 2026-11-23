@@ -3,6 +3,7 @@ param(
     [Parameter(Mandatory)]
     [ValidatePattern('^\d+\.\d+\.\d+$')]
     [string] $TargetVersion,
+    [string] $Package = 'Microsoft.Identity.Client',
     [string] $OutputDirectory,
     [string[]] $SampleId
 )
@@ -10,9 +11,10 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Maintenance.Common.ps1')
-$repositoryUrl = 'https://github.com/AzureAD/microsoft-authentication-library-for-dotnet.git'
+$source = Get-MaintenanceSource -Package $Package
+$repositoryUrl = $source.repositoryUrl
 $samples = @(Get-MaintenanceSamples)
-$selected = @(Select-MsalSamples -Samples $samples -SampleId $SampleId)
+$selected = @(Select-MaintenanceSamples -Samples $samples -Package $Package -SampleId $SampleId)
 
 $evidencePath = if ($OutputDirectory) {
     [System.IO.Path]::GetFullPath($OutputDirectory)
@@ -23,7 +25,7 @@ if (Test-Path -LiteralPath $evidencePath) { throw 'Evidence directory already ex
 $resolved = @{}
 $sampleEvidence = @(foreach ($sample in $selected) {
     if (!$resolved.ContainsKey($sample.versionSpec)) {
-        $resolved[$sample.versionSpec] = Resolve-MsalBaseline -VersionSpec $sample.versionSpec
+        $resolved[$sample.versionSpec] = Resolve-MsalBaseline -VersionSpec $sample.versionSpec -Package $Package
     }
     $baselineVersion = $resolved[$sample.versionSpec]
     $status = if ([version] $baselineVersion -gt [version] $TargetVersion) { 'newer' }
@@ -50,12 +52,12 @@ try {
     $acquisitionFailures = @{}
     foreach ($version in @(@($TargetVersion) + $baselineVersions | Select-Object -Unique)) {
         try {
-            $packageUrl = "https://www.nuget.org/api/v2/package/Microsoft.Identity.Client/$version"
+            $packageUrl = "https://www.nuget.org/api/v2/package/$Package/$version"
             $packagePath = Join-Path $evidencePath "$version.nupkg"
             Invoke-WebRequest -Uri $packageUrl -OutFile $packagePath -TimeoutSec 60
             $archive = [System.IO.Compression.ZipFile]::OpenRead($packagePath)
             try {
-                $nuspecEntries = @($archive.Entries | Where-Object FullName -eq 'Microsoft.Identity.Client.nuspec')
+                $nuspecEntries = @($archive.Entries | Where-Object FullName -ceq "$Package.nuspec")
                 if ($nuspecEntries.Count -ne 1) { throw 'Package must contain exactly one expected nuspec.' }
                 $reader = [System.IO.StreamReader]::new($nuspecEntries[0].Open())
                 try { [xml] $nuspec = $reader.ReadToEnd() } finally { $reader.Dispose() }
@@ -64,11 +66,11 @@ try {
             $packageId = $metadata.SelectSingleNode('*[local-name()="id"]').InnerText
             $packageVersion = $metadata.SelectSingleNode('*[local-name()="version"]').InnerText
             $repository = $metadata.SelectSingleNode('*[local-name()="repository"]')
-            if ($packageId -cne 'Microsoft.Identity.Client' -or $packageVersion -cne $version -or !$repository) {
+            if ($packageId -cne $Package -or $packageVersion -cne $version -or !$repository) {
                 throw 'Unexpected package identity or missing repository metadata.'
             }
             if ($repository.GetAttribute('url').TrimEnd('/').Replace('.git', '') -ine $repositoryUrl.Replace('.git', '')) {
-                throw 'Package repository metadata does not identify the official MSAL.NET repository.'
+                throw 'Package repository metadata does not identify the selected official upstream repository.'
             }
             $packageCommit = $repository.GetAttribute('commit')
             if ($packageCommit -notmatch '^[0-9a-fA-F]{40}$') { throw 'Package must identify a full source commit.' }
@@ -88,7 +90,7 @@ try {
                 sourcePath = $checkoutPath
                 packageUrl = $packageUrl
                 packageSha256 = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash.ToLowerInvariant()
-                releaseUrl = "https://github.com/AzureAD/microsoft-authentication-library-for-dotnet/releases/tag/$version"
+                releaseUrl = $source.releaseBaseUrl + $version
             }
         } catch {
             if ($version -ceq $TargetVersion) { throw }
@@ -117,6 +119,12 @@ try {
             ':(glob)src/client/Microsoft.Identity.Client/Msal*Exception.cs'
         ) }
     )
+    if ($Package -cne 'Microsoft.Identity.Client') {
+        $diffDefinitions = @(
+            @{ name = 'sdk-client'; paths = @('src') },
+            @{ name = 'scenario-apis'; paths = @('src', 'tests') }
+        )
+    }
     $comparisons = @(foreach ($baselineVersion in $baselineVersions) {
         if ($acquisitionFailures.ContainsKey($baselineVersion)) { continue }
         $baseline = $releases | Where-Object version -EQ $baselineVersion
@@ -146,6 +154,7 @@ try {
     $manifestPath = Join-Path $evidencePath 'manifest.json'
     [ordered]@{
         schemaVersion = 2
+        package = $Package
         repository = $repositoryUrl
         targetVersion = $TargetVersion
         samples = $sampleEvidence
@@ -154,7 +163,7 @@ try {
         comparisons = $comparisons
         limitations = 'Floating references are resolved by an isolated net8.0 NuGet restore during setup, not inferred historical installs. Newer samples remain unchanged. Source inspection and builds do not prove authentication. Never execute SDK code.'
     } | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $manifestPath -Encoding utf8
-    Write-Host "PASS: exact NuGet/tag provenance for $($releases.Count) releases; $($selected.Count) direct MSAL.NET samples inventoried."
+    Write-Host "PASS: exact NuGet/tag provenance for $($releases.Count) releases; $($selected.Count) samples referencing $Package inventoried."
     Write-Output $manifestPath
 } finally {
     $env:GIT_TERMINAL_PROMPT = $previousPrompt

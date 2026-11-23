@@ -1,6 +1,14 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const assignIssue = require('./assign-maintenance-issue.cjs');
+const { readFileSync } = require('node:fs');
+const { join } = require('node:path');
+const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+const workflow = readFileSync(join(__dirname, '../workflows/release-maintenance.yml'), 'utf8');
+const issueScript = workflow.match(/^          script: \|\r?\n([\s\S]*)$/m);
+assert.ok(issueScript, 'The shared release workflow must contain its issue script.');
+const runIssueScript = new AsyncFunction('github', 'context', 'core', 'require', 'process',
+  issueScript[1].replace(/^            /gm, ''));
 
 function fixture(overrides = {}, timeline = [[]]) {
   const requests = [];
@@ -102,3 +110,80 @@ test('propagates API failures without retrying assignment', async () => {
   await assert.rejects(assignIssue(input), /API unavailable/);
   assert.equal(attempts, 1);
 });
+
+function releaseFixture(packageId, upstream) {
+  const calls = [];
+  const outputs = {};
+  const pages = [[]];
+  const env = {
+    RELEASE_PACKAGE: packageId,
+    RELEASE_VERSION: '4.10.0',
+    RELEASE_NOTES_URL: `https://github.com/${upstream}/releases/tag/4.10.0`,
+    DRY_RUN: 'false',
+    EVENT_KEY: ''
+  };
+  const context = { repo: { owner: 'hossnrabbit', repo: 'ms-identity-docs-code-dotnet' } };
+  const core = { notice: () => {}, setOutput: (name, value) => { outputs[name] = value; } };
+  const github = {
+    rest: { issues: {
+      listForRepo: 'issues',
+      create: async parameters => {
+        calls.push({ kind: 'create', parameters });
+        return { data: { number: 42, html_url: 'https://example.test/42' } };
+      }
+    } },
+    paginate: { iterator: async function* (endpoint, parameters) {
+      assert.equal(endpoint, 'issues');
+      assert.equal(parameters.state, 'all');
+      calls.push({ kind: 'list' });
+      for (const data of pages) yield { data };
+    } },
+    request: async () => { throw new Error('The shared workflow must never assign an agent.'); }
+  };
+  return { calls, outputs, pages, env, run: () => runIssueScript(github, context, core, require, { env }) };
+}
+
+for (const [packageId, upstream] of [
+  ['Microsoft.Identity.Client', 'AzureAD/microsoft-authentication-library-for-dotnet'],
+  ['Microsoft.Identity.Web', 'AzureAD/microsoft-identity-web'],
+  ['Microsoft.Identity.Web.UI', 'AzureAD/microsoft-identity-web']
+]) {
+  test(`shared workflow dry run has no GitHub calls for ${packageId}`, async () => {
+    const state = releaseFixture(packageId, upstream);
+    state.env.DRY_RUN = 'true';
+    await state.run();
+    assert.deepEqual(state.calls, []);
+  });
+
+  test(`shared workflow creates and deduplicates closed ${packageId} issues`, async () => {
+    const state = releaseFixture(packageId, upstream);
+    await state.run();
+    assert.equal(state.outputs['issue-number'], 42);
+    const created = state.calls.find(call => call.kind === 'create').parameters;
+    assert.ok(created.body.includes(`repository must match https://github.com/${upstream}.git`));
+    assert.ok(created.body.includes(`-Package ${packageId}`));
+    assert.ok(created.body.includes('targeting test/msal-harness-e2e, never main or upstream'));
+    const marker = created.body.split('\n')[0];
+    state.pages.push([
+      { number: 99, state: 'closed', user: { login: 'someone-else' }, body: marker },
+      { number: 42, state: 'closed', user: { login: 'github-actions[bot]' }, body: marker, html_url: 'https://example.test/42' }
+    ]);
+    await state.run();
+    assert.equal(state.calls.filter(call => call.kind === 'create').length, 1);
+    assert.equal(state.outputs['issue-number'], 42);
+  });
+}
+
+for (const [field, value] of [
+  ['RELEASE_PACKAGE', 'Untrusted.Package'],
+  ['RELEASE_VERSION', '4.10.0-preview'],
+  ['RELEASE_NOTES_URL', 'https://github.com/AzureAD/microsoft-identity-web/releases/tag/4.10.0'],
+  ['EVENT_KEY', 'incorrect-key']
+]) {
+  test(`shared workflow rejects invalid ${field} before GitHub calls`, async () => {
+    const state = releaseFixture('Microsoft.Identity.Client', 'AzureAD/microsoft-authentication-library-for-dotnet');
+    state.env[field] = value;
+    await assert.rejects(state.run());
+    assert.deepEqual(state.calls, []);
+  });
+}

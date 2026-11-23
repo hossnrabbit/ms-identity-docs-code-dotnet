@@ -47,6 +47,20 @@ function Get-MaintenanceSamples {
             default { $false }
         }
         if (!$valid) { throw "Dependency classification changed for $($sample.id)." }
+        $references = @($project.SelectNodes('//PackageReference') | Where-Object {
+            $_.GetAttribute('Include') -ceq 'Microsoft.Identity.Client' -or
+            $_.GetAttribute('Include') -cmatch '^Microsoft\.Identity\.Web(?:\.[A-Za-z0-9]+)*$'
+        } | ForEach-Object {
+            $referenceVersion = $_.GetAttribute('Version')
+            if ($referenceVersion -notmatch '^\d+\.\d+\.\d+$|^\d+\.\*$') {
+                throw "Unsupported identity package reference for $($sample.id)."
+            }
+            [pscustomobject]@{ package = $_.GetAttribute('Include'); versionSpec = $referenceVersion }
+        })
+        if (@($references | ForEach-Object { $_.package } | Select-Object -Unique).Count -ne $references.Count) {
+            throw "Duplicate identity package references for $($sample.id)."
+        }
+        $sample | Add-Member -NotePropertyName references -NotePropertyValue $references
         if ($direct.Count) {
             $versionSpec = $direct[0].GetAttribute('Version')
             if ($versionSpec -notmatch '^\d+\.\d+\.\d+$|^\d+\.\*$') {
@@ -55,6 +69,46 @@ function Get-MaintenanceSamples {
             $sample | Add-Member -NotePropertyName versionSpec -NotePropertyValue $versionSpec
         }
         $sample
+    }
+}
+
+function Get-MaintenanceSource {
+    param([Parameter(Mandatory)][string] $Package)
+
+    $repository = if ($Package -ceq 'Microsoft.Identity.Client') {
+        'AzureAD/microsoft-authentication-library-for-dotnet'
+    } elseif ($Package -cmatch '^Microsoft\.Identity\.Web(?:\.[A-Za-z0-9]+)*$') {
+        'AzureAD/microsoft-identity-web'
+    } else { throw 'Unsupported identity package.' }
+    [pscustomobject]@{
+        package = $Package
+        repository = $repository
+        repositoryUrl = "https://github.com/$repository.git"
+        releaseBaseUrl = "https://github.com/$repository/releases/tag/"
+    }
+}
+
+function Select-MaintenanceSamples {
+    param([object[]] $Samples, [string] $Package = 'Microsoft.Identity.Client', [string[]] $SampleId)
+
+    Get-MaintenanceSource -Package $Package | Out-Null
+    if ($Package -cnotin @($Samples | ForEach-Object { $_.references } | ForEach-Object { $_.package })) { throw 'No cataloged sample directly references this package.' }
+    foreach ($id in $SampleId) {
+        $sample = @($Samples | Where-Object id -CEQ $id)
+        if ($sample.Count -ne 1) { throw "Unknown sample: $id" }
+        if ($Package -cnotin @($sample[0].references | ForEach-Object { $_.package })) {
+            if ($Package -ceq 'Microsoft.Identity.Client') { throw "$id is not a direct MSAL.NET maintenance target; do not add an MSAL reference." }
+            throw "$id does not directly reference $Package; do not introduce a dependency."
+        }
+    }
+    foreach ($sample in $Samples) {
+        if ($SampleId -and $sample.id -cnotin $SampleId) { continue }
+        $reference = @($sample.references | Where-Object package -CEQ $Package)
+        if (!$reference.Count) { continue }
+        $selection = $sample.PSObject.Copy()
+        $selection | Add-Member -NotePropertyName versionSpec -NotePropertyValue $reference[0].versionSpec -Force
+        $selection | Add-Member -NotePropertyName package -NotePropertyValue $Package
+        $selection
     }
 }
 
@@ -75,15 +129,16 @@ function Select-MsalSamples {
 }
 
 function Resolve-MsalBaseline {
-    param([Parameter(Mandatory)][string] $VersionSpec)
+    param([Parameter(Mandatory)][string] $VersionSpec, [string] $Package = 'Microsoft.Identity.Client')
 
+    Get-MaintenanceSource -Package $Package | Out-Null
     if ($VersionSpec -match '^\d+\.\d+\.\d+$') { return $VersionSpec }
     if ($VersionSpec -notmatch '^\d+\.\*$') { throw 'Unsupported floating MSAL version.' }
     $scratch = Join-Path ([IO.Path]::GetTempPath()) ('msal-resolve-' + [guid]::NewGuid())
     New-Item -ItemType Directory -Path $scratch | Out-Null
     try {
         $projectPath = Join-Path $scratch 'Resolve.csproj'
-        '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup><ItemGroup><PackageReference Include="Microsoft.Identity.Client" Version="{0}" /></ItemGroup></Project>' -f $VersionSpec |
+        '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup><ItemGroup><PackageReference Include="{0}" Version="{1}" /></ItemGroup></Project>' -f $Package, $VersionSpec |
             Set-Content -LiteralPath $projectPath -Encoding utf8
         $configPath = Join-Path $scratch 'NuGet.Config'
         '<configuration><packageSources><clear/><add key="nuget.org" value="https://www.nuget.org/api/v2/"/></packageSources></configuration>' |
@@ -91,7 +146,7 @@ function Resolve-MsalBaseline {
         & dotnet restore $projectPath --configfile $configPath --force-evaluate --verbosity quiet '-p:NuGetAudit=false' | Out-Host
         if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve floating MSAL reference using official NuGet.' }
         $assets = Get-Content -LiteralPath (Join-Path $scratch 'obj/project.assets.json') -Raw | ConvertFrom-Json
-        $matches = @($assets.libraries.PSObject.Properties.Name | Where-Object { $_ -cmatch '^Microsoft.Identity.Client/\d+\.\d+\.\d+$' })
+        $matches = @($assets.libraries.PSObject.Properties.Name | Where-Object { $_ -cmatch ('^' + [regex]::Escape($Package) + '/\d+\.\d+\.\d+$') })
         if ($matches.Count -ne 1) { throw 'Floating MSAL reference did not resolve to one exact stable version.' }
         return $matches[0].Split('/')[1]
     } finally {

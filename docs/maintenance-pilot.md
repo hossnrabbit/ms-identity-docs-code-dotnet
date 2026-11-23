@@ -1,4 +1,4 @@
-# Multi-example MSAL.NET Maintenance Pilot
+# Shared Identity Sample Maintenance
 
 This is a sandbox in `hossnrabbit/ms-identity-docs-code-dotnet`, not a rollout to
 Azure-Samples. The catalog in `scripts/maintenance-samples.json` covers all 13
@@ -7,15 +7,19 @@ sample source, dependencies, frameworks, credentials, or tenant settings.
 
 ## GitHub-Only Discovery Test
 
-Current test branch: `test/msal-harness-e2e`. This is the MSAL.NET counterpart to
-the separate IdWeb test in `hossnrabbit/active-directory-aspnetcore-webapp-openidconnect-v2`
-on `test/idweb-harness-e2e`. Neither test changes a default branch.
+There is ONE harness on `test/msal-harness-e2e` for releases from either
+`AzureAD/microsoft-authentication-library-for-dotnet` or
+`AzureAD/microsoft-identity-web`. The branch name is retained for compatibility,
+not SDK-specific routing. The earlier IdWeb-specific test entry point is retired.
+One catalog, detector, evidence schema, validator, and implementer/planner/reviewer
+process select the relevant upstream from the requested package. No default
+branch is changed. Supporting another package does not require another harness.
 
 After the branch is reviewed and published, dispatch `Release maintenance issue`
 on this test branch with `detect_latest=true` and `dry_run=true`. Leave version,
-release URL, and event key empty; package may retain `Microsoft.Identity.Client`.
-This queries only NuGet's version index and compares exact references in the five
-cataloged direct-MSAL samples. Numeric stable versions only; previews are ignored.
+release URL, event key, and package empty to check both upstreams, or specify an
+existing package to filter the scan. This queries only NuGet's version indexes
+and compares the cataloged direct references. Numeric stable versions only; previews are ignored.
 Feed failures fail the job rather than masquerading as no update. No restores,
 SDK execution, source/package downloads, sign-in, or tenant credentials are needed.
 
@@ -42,29 +46,65 @@ implied by local offline tests.
 
 ## Example Inventory
 
-| Example | Existing authentication dependency | MSAL.NET release scope |
+| Example | Existing authentication dependency | Shared harness release scope |
 | --- | --- | --- |
 | console-cli | Microsoft.Identity.Client 4.64.0 | Enabled; .NET 8 device code/silent |
-| console-daemon | IdWeb.TokenCache 3.1.0; transitive MSAL use | Excluded; needs an IdWeb-aware adapter |
+| console-daemon | IdWeb.TokenCache 3.1.0; transitive MSAL use | Its existing IdWeb package only |
 | desktop-winforms | Microsoft.Identity.Client 4.* | Enabled; .NET 8 Windows interactive/silent |
 | desktop-winui | Microsoft.Identity.Client 4.* | Enabled; .NET 8 WinUI interactive/silent |
 | desktop-wpf | Microsoft.Identity.Client 4.* | Enabled; .NET 8 Windows interactive/silent |
 | spa-blazor-wasm | Microsoft.Authentication.WebAssembly.Msal 8.* | Excluded; browser MSAL, not MSAL.NET |
 | web-api-azure-function | Functions SDK 4.4.0; Easy Auth | Excluded; no MSAL/IdWeb reference |
-| web-api-obo-client | IdWeb/DownstreamApi 3.1.0 | Excluded; IdWeb-owned reference |
-| web-api-obo-user | IdWeb/DownstreamApi 3.1.0 | Excluded; IdWeb-owned reference |
-| web-api | IdWeb 3.7.1; .NET 9 bearer validation | Excluded; IdWeb-owned reference |
-| web-app-aspnet | IdWeb/UI/DownstreamApi 3.8.0 | Excluded; IdWeb-owned reference |
-| web-app-blazor-server | IdWeb/UI/DownstreamApi 3.1.0 | Excluded; IdWeb-owned reference |
+| web-api-obo-client | IdWeb/DownstreamApi 3.1.0 | Its existing IdWeb packages |
+| web-api-obo-user | IdWeb/DownstreamApi 3.1.0 | Its existing IdWeb packages |
+| web-api | IdWeb 3.7.1; .NET 9 bearer validation | Its existing IdWeb packages |
+| web-app-aspnet | IdWeb/UI/DownstreamApi 3.8.0 | Its existing IdWeb packages |
+| web-app-blazor-server | IdWeb/UI/DownstreamApi 3.1.0 | Its existing IdWeb packages |
 | xplat-maui | Microsoft.Identity.Client 4.38.0 | Scoped; legacy .NET 6 Android/Windows, currently provenance-blocked |
 
-The five direct-reference projects are routed independently. Never add MSAL.NET
-references to excluded examples. Supporting their wrapper/browser releases
-requires separate evidence and validation adapters, not a blanket MSAL bump.
+Package applicability is evaluated per sample. Never add MSAL.NET to an IdWeb-only
+application or use an MSAL version as an IdWeb version. A transitive release does
+not authorize a dependency override. Browser MSAL and Easy Auth remain excluded.
+
+## One Source-Backed Update Process
+
+For a specific release, use the same release workflow with `detect_latest=false`,
+an existing `package`, exact `version`, matching official `release_notes_url`,
+and empty `event_key`. For example, Microsoft.Identity.Client uses the MSAL.NET
+tag URL; Microsoft.Identity.Web or Microsoft.Identity.Web.UI uses the IdWeb tag
+URL. There is no separate SDK workflow or setup implementation.
+
+`Get-MaintenanceSourceEvidence.ps1 -Package <package> -TargetVersion <version>`
+prepares both exact source trees and scenario/source diffs in trusted hosted
+setup. The schema-2 manifest records the package, official repository, target,
+per-sample baselines, source/tag commits, package hashes, and comparison hashes.
+`Validate-Maintenance.ps1 -Package <package>` checks that same evidence and the
+applicable existing references. Package defaults remain MSAL-compatible for old
+callers, but all agent tasks must pass the issue's explicit package.
+
+Before a future agent session, a maintainer must set matching non-secret Actions
+variables `MAINTENANCE_PACKAGE` and `MAINTENANCE_TARGET_VERSION`. The setup workflow
+also accepts explicit `package` and `target_version` inputs for a hosted smoke
+test. A standalone smoke test does not prove agent setup import. There is no
+automatic fallback version or concurrent-target agent setup. Missing/mismatched
+configuration or evidence blocks editing rather than guessing.
+
+The existing planner, implementer, and reviewer work for either upstream. They
+must compare public contracts, implementations, tests, parameters/defaults, and
+scenario improvements across the sample's actual baseline and target, then make
+justified package, source, and README edits within AGENTS.md. Package-only changes
+need a completed discovery assessment. Do not force code churn when no applicable
+source change is justified. Hosted CI includes the six IdWeb server samples as
+well as the existing console and Windows clients. Legacy MAUI remains gated.
+
+Current automation still stops at issue creation: automatic agent assignment is
+disabled. Supported no-PAT authentication, verified test-branch setup import, and
+provenance remain prerequisites for unattended code-update PRs. This unified
+implementation does not claim that a real agent update or hosted build succeeded.
 
 ## Historical Prototype Setup (Not For This Test Branch)
 
-The following describes the earlier default-branch prototype, not current
+The following describes the earlier MSAL-only default-branch prototype, not current
 activation instructions. Do not create a PAT, change secrets or policies, target
 `main`, or enable assignment for this test. Use the discovery procedure above.
 
@@ -128,18 +168,18 @@ Source acquisition runs inside `copilot-setup-steps.yml` BEFORE agent execution.
 Setup resolves original references, downloads distinct applicable releases,
 verifies NuGet/tag commits, and checks source/test
 files and the manifest handoff in a separate Bash step. It writes the manifest to
-`.maintenance-evidence/manifest.json` and exports `MSAL_SOURCE_MANIFEST` as a
+`.maintenance-evidence/manifest.json` and exports `MAINTENANCE_SOURCE_MANIFEST` as a
 convenience. The fixed repository-relative path does not depend on that environment
 variable being available to the agent. Git ignores the entire evidence directory.
 
-The pilot setup target defaults to 4.91.1. For a different release, a maintainer
-must set the repository Actions variable `MSAL_SOURCE_TARGET_VERSION` BEFORE
-starting a fresh session. The issue target must match the prepared manifest.
+Setup requires the repository Actions variables `MAINTENANCE_PACKAGE` and
+`MAINTENANCE_TARGET_VERSION` BEFORE starting a fresh session. Both the issue
+package and target must match the prepared manifest and official upstream.
 This is deliberately a single-target pilot, not concurrent multi-release routing.
 The agent must not retry source acquisition or modify a prepared snapshot. Missing
 or mismatched evidence is SETUP_BLOCKED and needs a setup repair/new session.
 
-Use the hosted setup workflow, or the optional `source_target_version` input of
+Use the hosted setup workflow, or the `source_package` and optional `source_target_version` inputs of
 Maintenance validation, for source acquisition. Do not run local restores,
 downloads, or builds where NuGet access is unavailable or forbidden.
 
@@ -251,7 +291,7 @@ After maintenance, check exact targets and immutable source evidence using the
 ORIGINAL manifest, not a newly generated snapshot:
 
 ```powershell
-./scripts/Validate-Maintenance.ps1 -ExpectedVersion 4.91.1 -EvidenceManifest ./.maintenance-evidence/manifest.json -CheckOnly
+./scripts/Validate-Maintenance.ps1 -Package Microsoft.Identity.Client -ExpectedVersion 4.91.1 -EvidenceManifest ./.maintenance-evidence/manifest.json -CheckOnly
 ```
 
 Use the actual target version after a maintenance edit. The script checks each
