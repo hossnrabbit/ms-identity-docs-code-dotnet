@@ -285,3 +285,4 @@ try {
     Remove-Item -LiteralPath $scratch -Recurse -Force
 }
 Write-Host 'PASS: catalog coverage, dependency routing, framework guards, exact targets, immutable snapshots, blocked-sample protection, and strict missing-build checks.'
+exit 0
