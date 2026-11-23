@@ -69,6 +69,53 @@ source-to-update/build path; it is not an agent discovery assessment or reviewed
 Trusted setup uses `-SetupCheck -CheckOnly` to validate original references;
 normal update validation remains strict and must not use SetupCheck.
 
+## Live NuGet-Commit Test: 2026-11-23
+
+Published runtime `4de4bbb83106b29ddb2ab2d0fc99943105b15d13` passes both
+package-selected source-to-update/build smokes and all eleven baseline validation
+jobs. This supersedes the historical tag-only source blockers, not the remaining
+real-agent setup prerequisite. No sample changes were retained or published.
+
+| Check | Verified result | Evidence |
+| --- | --- | --- |
+| Client 4.92.0 source-to-build | PASS; five selected clients, three exact source releases, disposable console-cli update to 4.92.0 and required build, original project restored | [Run 45282230920](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/actions/runs/45282230920) |
+| Web 4.18.0 source-to-build | PASS; five existing direct Web references, four exact source releases, disposable web-api-obo-client update to 4.18.0 and required build, original project restored | [Run 45282234302](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/actions/runs/45282234302) |
+| Final baseline validation | PASS; eleven jobs including all three Windows desktops and six server samples | [Run 45282238135](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/actions/runs/45282238135) |
+| Actual account-based setup guard | SETUP_BLOCKED correctly; requested Client 4.92.0, imported original Client 4.91.1 evidence; zero changed files | [Task](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/tasks/b3ba535c-5bb3-441c-80e3-0f5ae0459099), [run 45282065299](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/actions/runs/45282065299) |
+
+Client 4.92.0 uses NuGet commit `2465fc31fa2b481b68660670e2becfd3fba7c631`;
+the different tag is advisory. Web 4.18.0 uses
+`df82ea2c21e2fde81c3deb56578654b05fd59676`; the unavailable tag is advisory.
+Client 4.38.0 source now verifies at
+`7d8a50263eac6dd7e52365c278774c6be7f82a10`, despite its different tag.
+No declared commit was replaced with a tag or moving branch.
+
+The first hosted Client run [45281472161](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/actions/runs/45281472161)
+exposed a Linux fixture returning both `/usr/bin/git` and `/bin/git`; the fixture
+now selects one executable. The next run [45281944305](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/actions/runs/45281944305)
+passed assertions but leaked an intentionally failed Git fetch's exit code into
+Actions; successful tests now explicitly return zero. Setup-only validation also
+uses the separately tested `-SetupCheck -CheckOnly` gate for pristine references;
+normal target/update validation remains strict. Final runs above include these fixes.
+
+GitHub's actual registered default-branch setup still invokes the forwarding shim
+with `MSAL_SOURCE_TARGET_VERSION=4.91.1`. No default branch, setup variables,
+secrets, permission policies, schedules, or issue assignment state was changed.
+The read-only task stopped on that mismatch without an implementation or review.
+The service created an empty draft despite `create_pull_request=false`; its
+[PR 23](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/pull/23) was verified
+to contain zero changed files and closed. Its service-created initial-plan commit
+is not a maintenance implementation. Historical issue 18/PR 19 remain untouched;
+issue 21 remains open/unassigned and issue 22 remains closed/unassigned.
+
+A real reviewed latest-target agent update is still BLOCKED pending explicit
+approval to activate matching shared setup on the default branch and configure
+the non-secret package/target variables. Standalone smoke success cannot supply
+evidence to another agent session. No independent planner/reviewer or final
+maintenance-PR build is claimed. MAUI builds, SDK unit tests, and sign-in remain
+NOT RUN. The passing smokes exercise package updates/builds, not source-supported
+scenario improvement discovery or authentication behavior.
+
 ## Historical Live Fork Test: 2026-11-23
 
 The unified harness and retired duplicate entry point are published on their
