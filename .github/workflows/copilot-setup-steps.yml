@@ -45,8 +45,10 @@ jobs:
           SOURCE_TARGET_VERSION: ${{ inputs.target_version || vars.MAINTENANCE_TARGET_VERSION }}
         run: |
           $ErrorActionPreference = 'Stop'
+          if (!$env:SOURCE_PACKAGE) { $env:SOURCE_PACKAGE = $env:MAINTENANCE_PACKAGE }
+          if (!$env:SOURCE_TARGET_VERSION) { $env:SOURCE_TARGET_VERSION = $env:MAINTENANCE_TARGET_VERSION }
           if (!$env:SOURCE_PACKAGE -or !$env:SOURCE_TARGET_VERSION) {
-            throw 'SETUP_BLOCKED: configure matching MAINTENANCE_PACKAGE and MAINTENANCE_TARGET_VERSION before an agent session, or supply both workflow inputs for a setup smoke test.'
+            throw 'SETUP_BLOCKED: configure matching MAINTENANCE_PACKAGE and MAINTENANCE_TARGET_VERSION as Agents variables before an agent session, or supply both workflow inputs for a setup smoke test.'
           }
           . ./scripts/Maintenance.Common.ps1
           $source = Get-MaintenanceSource -Package $env:SOURCE_PACKAGE
