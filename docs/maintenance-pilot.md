@@ -15,7 +15,7 @@ One catalog, detector, evidence schema, validator, and implementer/planner/revie
 process select the relevant upstream from the requested package. No default
 branch is changed. Supporting another package does not require another harness.
 
-After the branch is reviewed and published, dispatch `Release maintenance issue`
+On the published test branch, dispatch `Release maintenance issue`
 on this test branch with `detect_latest=true` and `dry_run=true`. Leave version,
 release URL, event key, and package empty to check both upstreams, or specify an
 existing package to filter the scan. This queries only NuGet's version indexes
@@ -43,6 +43,54 @@ Publishing or dispatching this branch does not activate periodic execution.
 Default-branch activation and corresponding guard changes require separate
 approval. No commit, push, live feed query, issue creation, or hosted result is
 implied by local offline tests.
+
+## Live Fork Test: 2026-11-23
+
+The unified harness and retired duplicate entry point are published on their
+existing test branches. All 11 hosted validation jobs passed at runtime commit
+`4e6d73039defee0e6d620addae97462970331e8d`: offline harness, console, six IdWeb
+server samples, and three Windows desktop samples. These are baseline sample
+builds, not builds of a new maintenance PR. The latest-release update E2E is
+BLOCKED, not successful.
+
+| Check | Verified result | Evidence |
+| --- | --- | --- |
+| Both-upstream discovery dry run | PASS; Client 4.92.0 and existing Web-family packages 4.18.0; no assignment | [Run 45267120602](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/actions/runs/45267120602) |
+| Client release issue | PASS; created issue 21 | [Run 45267543950](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/actions/runs/45267543950), [issue 21](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/issues/21) |
+| Web release issue | PASS; created issue 22 | [Run 45267551061](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/actions/runs/45267551061), [issue 22](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/issues/22) |
+| Open Client issue replay | PASS; reused issue 21, remained open/unassigned, no duplicate | [Run 45268022193](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/actions/runs/45268022193) |
+| Closed Web issue replay | PASS; reused issue 22, remained closed/unassigned, no duplicate | [Run 45268028143](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/actions/runs/45268028143) |
+| Client 4.92.0 source setup | BLOCKED; tag/NuGet commit mismatch | [Run 45267555610](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/actions/runs/45267555610) |
+| Web 4.18.0 source setup | BLOCKED; exact official tag absent | [Run 45267559356](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/actions/runs/45267559356) |
+| Known Client 4.91.1 source smoke | PASS for target and console baseline; MAUI baseline blocked | [Run 45268033883](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/actions/runs/45268033883) |
+| Account-based read-only agent probe | PASS for task start, test checkout, setup import and original-manifest read; zero changed files, no PR | [Task](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/tasks/8217e31f-ba45-4389-82a8-68e3a975245d), [run 45269020326](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/actions/runs/45269020326) |
+| Final runtime validation | PASS; all 11 jobs | [Run 45269748141](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/actions/runs/45269748141) |
+| Retired IdWeb entry point | PASS; redirect ran, issue job skipped | [Run 45267050106](https://github.com/hossnrabbit/active-directory-aspnetcore-webapp-openidconnect-v2/actions/runs/45267050106) |
+
+Client 4.92.0 tag commit `4392f63e5ad7232ee338ff9cd4a9c7463ae1c6ff` differs
+from NuGet commit `2465fc31fa2b481b68660670e2becfd3fba7c631`. IdWeb setup
+could not fetch `refs/tags/4.18.0`. Neither failure was bypassed or replaced
+with alternative source. The known-release smoke test is not a substitute for
+latest-release evidence. Replaying 4.91.1 also correctly reused historical
+issue 18; its existing Copilot trial/PR and repair budget were left untouched.
+
+The user's existing GitHub CLI OAuth login successfully started the read-only
+task through the documented agent-tasks API. No ADO or new PAT was required.
+The actual agent run checked out `5d1edb3ff1ff87eee8de860d4f0f61691e6b7b11`,
+imported the registered MSAL-only setup, and read the original prepared manifest.
+The legacy `Get-MsalSourceEvidence.ps1` filename is a forwarding shim to the
+shared implementation, not another harness. This proves that MSAL handoff only;
+package-selected IdWeb agent setup import is not proven. No evidence-aware
+agent validation PASS, source update, independent review, or final update-PR
+build is claimed from the probe.
+
+Hosted tests exposed and fixed two harness tool issues: preserve the Windows
+platform argument as an array, and use full-framework MSBuild for WinUI's legacy
+CLR4 XAML compiler. No sample source, package or framework was changed. Both
+default heads were verified unchanged. No merges, secrets, policies, tenant
+settings, or automatic schedules were changed. MAUI builds, SDK unit tests and
+live sign-in were NOT RUN. Unattended updates still require provenance resolution,
+approved package-selected setup activation, and an actual reviewed update trial.
 
 ## Example Inventory
 
@@ -98,9 +146,9 @@ source change is justified. Hosted CI includes the six IdWeb server samples as
 well as the existing console and Windows clients. Legacy MAUI remains gated.
 
 Current automation still stops at issue creation: automatic agent assignment is
-disabled. Supported no-PAT authentication, verified test-branch setup import, and
-provenance remain prerequisites for unattended code-update PRs. This unified
-implementation does not claim that a real agent update or hosted build succeeded.
+disabled. Package-selected test-branch setup import and strict provenance remain
+prerequisites for unattended code-update PRs. The live record above verifies
+hosted baseline builds and the bounded MSAL handoff probe, not a real update PR.
 
 ## Historical Prototype Setup (Not For This Test Branch)
 
