@@ -138,7 +138,7 @@ foreach ($sample in $selected) {
         continue
     }
     $projectPath = Join-Path $repositoryRoot $sample.project
-    $properties = if ($sample.platform -eq 'windows') { @('-p:Platform=x64') } else { @() }
+    $properties = @(if ($sample.platform -eq 'windows') { '-p:Platform=x64' })
     Write-Host "Validating $($sample.id) with $Package reference $($sample.versionSpec)."
     & dotnet restore $projectPath --verbosity minimal @properties
     if ($LASTEXITCODE -ne 0) { throw "Sample restore failed: $($sample.id)." }

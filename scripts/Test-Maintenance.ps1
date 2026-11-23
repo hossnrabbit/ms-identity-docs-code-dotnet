@@ -50,6 +50,24 @@ Assert-Throws { & (Join-Path $PSScriptRoot 'Get-MaintenanceSourceEvidence.ps1') 
 Assert-Throws { & (Join-Path $PSScriptRoot 'Get-MsalSourceEvidence.ps1') -TargetVersion '4.91.1' -SampleId 'spa-blazor-wasm' } '*not a direct MSAL.NET*'
 Assert-Throws { & (Join-Path $PSScriptRoot 'Get-MsalSourceEvidence.ps1') -Package 'Microsoft.Identity.Web' -TargetVersion '4.18.0' -SampleId 'console-cli' } '*does not directly reference*'
 
+if ($IsWindows) {
+    & {
+        $global:maintenanceTestDotnetCalls = [System.Collections.Generic.List[object]]::new()
+        function dotnet {
+            $global:maintenanceTestDotnetCalls.Add(@($args))
+            $global:LASTEXITCODE = 0
+        }
+        try {
+            & (Join-Path $PSScriptRoot 'Validate-Maintenance.ps1') -SampleId 'desktop-winui' -BuildPlatform windows -RequireAllBuilds
+            Assert-True ($global:maintenanceTestDotnetCalls.Count -eq 2) 'Expected mocked restore and build.'
+            Assert-True ($global:maintenanceTestDotnetCalls[0].Count -eq 5 -and $global:maintenanceTestDotnetCalls[0][-1] -ceq '-p:Platform=x64') 'Restore platform argument was split.'
+            Assert-True ($global:maintenanceTestDotnetCalls[1].Count -eq 8 -and $global:maintenanceTestDotnetCalls[1][-1] -ceq '-p:Platform=x64') 'Build platform argument was split.'
+        } finally {
+            Remove-Variable maintenanceTestDotnetCalls -Scope Global
+        }
+    }
+}
+
 $scratch = Join-Path ([IO.Path]::GetTempPath()) ('maintenance-tests-' + [guid]::NewGuid())
 New-Item -ItemType Directory -Path $scratch | Out-Null
 try {
