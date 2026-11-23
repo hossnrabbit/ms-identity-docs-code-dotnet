@@ -55,38 +55,30 @@ try {
             $packageUrl = "https://www.nuget.org/api/v2/package/$Package/$version"
             $packagePath = Join-Path $evidencePath "$version.nupkg"
             Invoke-WebRequest -Uri $packageUrl -OutFile $packagePath -TimeoutSec 60
-            $archive = [System.IO.Compression.ZipFile]::OpenRead($packagePath)
-            try {
-                $nuspecEntries = @($archive.Entries | Where-Object FullName -ceq "$Package.nuspec")
-                if ($nuspecEntries.Count -ne 1) { throw 'Package must contain exactly one expected nuspec.' }
-                $reader = [System.IO.StreamReader]::new($nuspecEntries[0].Open())
-                try { [xml] $nuspec = $reader.ReadToEnd() } finally { $reader.Dispose() }
-            } finally { $archive.Dispose() }
-            $metadata = $nuspec.SelectSingleNode('/*[local-name()="package"]/*[local-name()="metadata"]')
-            $packageId = $metadata.SelectSingleNode('*[local-name()="id"]').InnerText
-            $packageVersion = $metadata.SelectSingleNode('*[local-name()="version"]').InnerText
-            $repository = $metadata.SelectSingleNode('*[local-name()="repository"]')
-            if ($packageId -cne $Package -or $packageVersion -cne $version -or !$repository) {
-                throw 'Unexpected package identity or missing repository metadata.'
-            }
-            if ($repository.GetAttribute('url').TrimEnd('/').Replace('.git', '') -ine $repositoryUrl.Replace('.git', '')) {
-                throw 'Package repository metadata does not identify the selected official upstream repository.'
-            }
-            $packageCommit = $repository.GetAttribute('commit')
-            if ($packageCommit -notmatch '^[0-9a-fA-F]{40}$') { throw 'Package must identify a full source commit.' }
-            & git -c credential.helper= -c http.extraHeader= -C $sourcePath fetch --quiet --depth=1 $repositoryUrl "refs/tags/$version`:refs/tags/$version"
-            if ($LASTEXITCODE -ne 0) { throw "Cannot anonymously fetch official release tag $version." }
-            $tagCommit = (& git -C $sourcePath rev-parse "$version^{commit}").Trim()
-            if ($LASTEXITCODE -ne 0 -or $tagCommit -ine $packageCommit) {
-                throw "Release $version tag commit $tagCommit does not match NuGet commit $packageCommit; manual provenance review required."
-            }
+            $packageCommit = Get-MaintenancePackageCommit -Package $Package -Version $version -PackagePath $packagePath
+            & git -c credential.helper= -c http.extraHeader= -C $sourcePath fetch --quiet --no-tags --depth=1 $repositoryUrl $packageCommit
+            if ($LASTEXITCODE -ne 0) { throw "Cannot anonymously fetch NuGet-recorded source commit $packageCommit for $version." }
+            $actualCommit = (& git -C $sourcePath rev-parse 'FETCH_HEAD^{commit}').Trim()
+            if ($LASTEXITCODE -ne 0 -or $actualCommit -ine $packageCommit) { throw 'Fetched source does not match the NuGet-recorded commit.' }
             $checkoutPath = Join-Path $evidencePath $version
-            & git -C $sourcePath worktree add --quiet --detach $checkoutPath $tagCommit
+            & git -C $sourcePath worktree add --quiet --detach $checkoutPath $packageCommit
             if ($LASTEXITCODE -ne 0) { throw "Cannot materialize source for $version." }
+            $tagCommit = $null
+            $tagStatus = 'unavailable'
+            $tagDiagnostics = @(& git -c credential.helper= -c http.extraHeader= -C $sourcePath fetch --quiet --depth=1 $repositoryUrl "refs/tags/$version`:refs/tags/$version" 2>&1)
+            if ($LASTEXITCODE -eq 0) {
+                $resolvedTag = @(& git -C $sourcePath rev-parse "$version^{commit}" 2>&1)
+                if ($LASTEXITCODE -eq 0) {
+                    $tagCommit = ($resolvedTag -join '').Trim()
+                    $tagStatus = if ($tagCommit -ieq $packageCommit) { 'matches' } else { 'differs' }
+                } else { $tagDiagnostics += $resolvedTag }
+            }
+            if ($tagStatus -ne 'matches') { Write-Warning "ADVISORY: release tag $version is $tagStatus; source remains pinned to NuGet commit $packageCommit." }
             $releases += [ordered]@{
                 version = $version
                 tag = $version
-                commit = $tagCommit
+                tagObservation = [ordered]@{ status = $tagStatus; commit = $tagCommit; diagnostics = ($tagDiagnostics -join [Environment]::NewLine) }
+                commit = $packageCommit
                 sourcePath = $checkoutPath
                 packageUrl = $packageUrl
                 packageSha256 = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -134,7 +126,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Cannot compare the verified release source trees.' }
         $sourceDiffs = @(foreach ($definition in $diffDefinitions) {
             $diffPath = Join-Path $comparisonPath ($definition.name + '.diff')
-            $diffContent = @(& git --no-pager -C $sourcePath diff --no-ext-diff --no-textconv --unified=3 $baseline.commit $target.commit -- @($definition.paths))
+            $diffContent = @(& git --no-pager -C $sourcePath diff --no-ext-diff --no-textconv --unified=3 $baseline.commit $target.commit '--' @($definition.paths))
             if ($LASTEXITCODE -ne 0) { throw "Cannot prepare $($definition.name) source diff." }
             [string]::Join([Environment]::NewLine, $diffContent) | Set-Content -LiteralPath $diffPath -Encoding utf8
             [ordered]@{
@@ -154,6 +146,7 @@ try {
     $manifestPath = Join-Path $evidencePath 'manifest.json'
     [ordered]@{
         schemaVersion = 2
+        sourceProvenance = 'nuget-repository-commit'
         package = $Package
         repository = $repositoryUrl
         targetVersion = $TargetVersion
@@ -163,7 +156,7 @@ try {
         comparisons = $comparisons
         limitations = 'Floating references are resolved by an isolated net8.0 NuGet restore during setup, not inferred historical installs. Newer samples remain unchanged. Source inspection and builds do not prove authentication. Never execute SDK code.'
     } | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $manifestPath -Encoding utf8
-    Write-Host "PASS: exact NuGet/tag provenance for $($releases.Count) releases; $($selected.Count) samples referencing $Package inventoried."
+    Write-Host "PASS: exact NuGet-recorded source commits for $($releases.Count) releases; $($selected.Count) samples referencing $Package inventoried; release tags are advisory."
     Write-Output $manifestPath
 } finally {
     $env:GIT_TERMINAL_PROMPT = $previousPrompt

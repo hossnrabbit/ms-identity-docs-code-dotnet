@@ -44,7 +44,24 @@ Default-branch activation and corresponding guard changes require separate
 approval. No commit, push, live feed query, issue creation, or hosted result is
 implied by local offline tests.
 
-## Live Fork Test: 2026-11-23
+## NuGet-Commit Provenance Policy
+
+Source identity is the full commit recorded in each official NuGet package, not
+the release tag. Trusted setup checks the exact package identity/version and
+expected official repository, fetches that commit anonymously from that repository,
+and materializes it without substitution. The schema-2 manifest requires
+`sourceProvenance: nuget-repository-commit`. Validation re-reads the original
+package metadata and checks its commit against the clean source HEAD, preserving
+package and prepared-diff SHA256 checks. Older tag-only manifests must be prepared
+again; they are not silently accepted under this policy.
+
+`tagObservation` records matches, differs, or unavailable and the observed tag
+commit/diagnostics. Tags supplement release notes; missing or differing tags are
+warnings, not source blockers. Missing/invalid metadata, the wrong official
+repository, unavailable declared commits, and altered evidence remain blockers.
+The historical runs below retain their original strict-tag outcomes.
+
+## Historical Live Fork Test: 2026-11-23
 
 The unified harness and retired duplicate entry point are published on their
 existing test branches. All 11 hosted validation jobs passed at runtime commit
@@ -108,7 +125,7 @@ approved package-selected setup activation, and an actual reviewed update trial.
 | web-api | IdWeb 3.7.1; .NET 9 bearer validation | Its existing IdWeb packages |
 | web-app-aspnet | IdWeb/UI/DownstreamApi 3.8.0 | Its existing IdWeb packages |
 | web-app-blazor-server | IdWeb/UI/DownstreamApi 3.1.0 | Its existing IdWeb packages |
-| xplat-maui | Microsoft.Identity.Client 4.38.0 | Scoped; legacy .NET 6 Android/Windows, currently provenance-blocked |
+| xplat-maui | Microsoft.Identity.Client 4.38.0 | Scoped; legacy .NET 6 Android/Windows; compatible build toolchain still required |
 
 Package applicability is evaluated per sample. Never add MSAL.NET to an IdWeb-only
 application or use an MSAL version as an IdWeb version. A transitive release does
@@ -125,7 +142,8 @@ URL. There is no separate SDK workflow or setup implementation.
 `Get-MaintenanceSourceEvidence.ps1 -Package <package> -TargetVersion <version>`
 prepares both exact source trees and scenario/source diffs in trusted hosted
 setup. The schema-2 manifest records the package, official repository, target,
-per-sample baselines, source/tag commits, package hashes, and comparison hashes.
+per-sample baselines, NuGet-recorded source commits, advisory tag observations,
+package hashes, comparison hashes, and the required sourceProvenance policy.
 `Validate-Maintenance.ps1 -Package <package>` checks that same evidence and the
 applicable existing references. Package defaults remain MSAL-compatible for old
 callers, but all agent tasks must pass the issue's explicit package.
@@ -214,7 +232,7 @@ setup or agent prompts. Manual Assign to agent remains a maintainer recovery opt
 
 Source acquisition runs inside `copilot-setup-steps.yml` BEFORE agent execution.
 Setup resolves original references, downloads distinct applicable releases,
-verifies NuGet/tag commits, and checks source/test
+verifies NuGet-recorded commits in the expected official repository, and checks source/test
 files and the manifest handoff in a separate Bash step. It writes the manifest to
 `.maintenance-evidence/manifest.json` and exports `MAINTENANCE_SOURCE_MANIFEST` as a
 convenience. The fixed repository-relative path does not depend on that environment
@@ -234,7 +252,8 @@ downloads, or builds where NuGet access is unavailable or forbidden.
 The output directory must not already exist; the script refuses to overwrite a
 snapshot. Use the printed manifest path. The script downloads official NuGet packages for
 each applicable baseline and requested stable target, checks their repository commit
-metadata against exact Git tags, and creates temporary source worktrees plus a
+metadata, fetches the exact declared commits from the expected official repository,
+records advisory tags, and creates temporary source worktrees plus a
 file-level comparison manifest. Its schema-2 `samples` array records id, project,
 originalVersion, baselineVersion, targetVersion, and status. Its `comparisons`
 array holds one entry per distinct applicable baseline, including changedFiles
@@ -250,17 +269,19 @@ is marked newer and remains unchanged rather than being downgraded. Applicable
 floating references are pinned to the exact verified target during maintenance.
 If floating resolution fails, setup blocks rather than guessing an exact baseline.
 
-A missing tag, commit metadata, provenance match, or network access for the target
+A missing/invalid package commit, wrong repository metadata, unavailable declared
+commit, or network access needed for the target
 blocks setup globally. A baseline-only failure marks its samples setup-blocked,
 omits that comparison, and prohibits edits to those samples; other verified
 samples may proceed with an explicit PARTIAL result. Do not invent evidence,
 change baseline metadata, or weaken verification to clear a blocker.
 
-Observed MAUI blocker: the 4.38.0 tag resolves to
+Historical MAUI tag-policy blocker (not a blocker under the new commit policy): the 4.38.0 tag resolves to
 `876737608b6cc6caaead87751ed7aa43f57738fb`, while its NuGet repository commit is
-`7d8a50263eac6dd7e52365c278774c6be7f82a10`. This harness intentionally does not
-authorize MAUI updates until a maintainer resolves that provenance discrepancy.
-It also does not install or modernize the sample's legacy .NET 6 MAUI toolchain.
+`7d8a50263eac6dd7e52365c278774c6be7f82a10`. Under the new policy setup must fetch
+the latter commit from the official repository; the tag difference is advisory.
+MAUI changes still require verified source and a passing compatible build.
+The harness does not install or modernize the sample's legacy .NET 6 MAUI toolchain.
 Downloads are anonymous; no GitHub API token/SAML grant is needed. Network access
 must still be permitted by the hosted environment. Temporary artifacts are not
 committed and must remain unchanged for planning, validation, and review.

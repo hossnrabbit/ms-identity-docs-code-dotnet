@@ -12,8 +12,10 @@ trees. Read the sample catalog and schema-2 manifest. Check each selected sample
 package and official upstream repository against the request, then its
 originalVersion/resolved baseline and requested exact target; use its matching
 comparisons entry. Never use another sample's baseline. Leave newer and
-setup-blocked samples unchanged and list their reasons. Record both tag/commit
-identities per applicable sample. Read local SDK files; an authenticated
+setup-blocked samples unchanged and list their reasons. Require sourceProvenance
+`nuget-repository-commit`. Record both NuGet-recorded source commit identities and
+advisory tagObservation records per applicable sample; differing or unavailable
+tags do not invalidate package-backed source. Read local SDK files; an authenticated
 GitHub API or release-note lookup is not a prerequisite. Read the setup-prepared
 `.maintenance-evidence/manifest.json`; if it is missing or mismatched, report
 BLOCKED and request a setup repair. Do not ask the implementer to run the fetcher

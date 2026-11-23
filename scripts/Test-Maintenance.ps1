@@ -17,6 +17,16 @@ function Assert-Throws {
     Assert-True ($null -ne $caught -and $caught -like $Pattern) "Expected failure matching: $Pattern; actual: $caught"
 }
 
+function New-TestPackage {
+    param([string] $Path, [string] $Package, [string] $Version, [string] $Commit, [string] $Repository = (Get-MaintenanceSource -Package $Package).repositoryUrl)
+    $archive = [System.IO.Compression.ZipFile]::Open($Path, [System.IO.Compression.ZipArchiveMode]::Create)
+    try {
+        $writer = [System.IO.StreamWriter]::new($archive.CreateEntry("$Package.nuspec").Open())
+        try { $writer.Write(('<package><metadata><id>{0}</id><version>{1}</version><repository url="{2}" commit="{3}" /></metadata></package>' -f $Package, $Version, $Repository, $Commit)) }
+        finally { $writer.Dispose() }
+    } finally { $archive.Dispose() }
+}
+
 $samples = @(Get-MaintenanceSamples)
 $selected = @(Select-MsalSamples -Samples $samples)
 Assert-True ($samples.Count -eq 13) 'Expected all thirteen examples.'
@@ -97,11 +107,12 @@ try {
     foreach ($version in @('4.91.1', '0.0.1', $console.versionSpec) | Select-Object -Unique) {
         & git -C $sourcePath tag $version
         if ($LASTEXITCODE -ne 0) { throw 'Cannot tag test source fixture.' }
-        'test-only package fixture' | Set-Content -LiteralPath (Join-Path $scratch "$version.nupkg")
+        New-TestPackage -Path (Join-Path $scratch "$version.nupkg") -Package 'Microsoft.Identity.Client' -Version $version -Commit $commit
     }
     $packagePath = Join-Path $scratch '4.91.1.nupkg'
     $manifest = [ordered]@{
         schemaVersion = 2
+        sourceProvenance = 'nuget-repository-commit'
         repository = 'https://github.com/AzureAD/microsoft-authentication-library-for-dotnet.git'
         targetVersion = '4.91.1'
         sourceRepositoryPath = $sourcePath
@@ -172,7 +183,7 @@ try {
     & git -C $sourcePath tag $webSample.versionSpec
     if ($LASTEXITCODE -ne 0) { throw 'Cannot tag IdWeb source fixture.' }
     $webPackagePath = Join-Path $scratch "$($webSample.versionSpec).nupkg"
-    'test-only IdWeb package fixture' | Set-Content -LiteralPath $webPackagePath
+    New-TestPackage -Path $webPackagePath -Package 'Microsoft.Identity.Web' -Version $webSample.versionSpec -Commit $commit
     $manifest.repository = 'https://github.com/AzureAD/microsoft-identity-web.git'
     $manifest['package'] = 'Microsoft.Identity.Web'
     $manifest.targetVersion = $webSample.versionSpec
@@ -194,6 +205,60 @@ try {
     Assert-Throws { & (Join-Path $PSScriptRoot 'Validate-Maintenance.ps1') -Package 'Microsoft.Identity.Web.UI' -ExpectedVersion $webSample.versionSpec -EvidenceManifest $manifestPath -CheckOnly } '*match the exact target and official repository*'
     Assert-Throws { & (Join-Path $PSScriptRoot 'Validate-Maintenance.ps1') -ExpectedVersion $webSample.versionSpec -EvidenceManifest $manifestPath -CheckOnly } '*match the exact target and official repository*'
     Assert-Throws { & (Join-Path $PSScriptRoot 'Get-MaintenanceSourceEvidence.ps1') -Package 'Microsoft.Identity.Web' -TargetVersion $webSample.versionSpec -OutputDirectory $scratch } '*already exists*'
+    $invalidPackage = Join-Path $scratch 'invalid.nupkg'
+    New-TestPackage -Path $invalidPackage -Package 'Microsoft.Identity.Client' -Version '4.64.0' -Commit $commit -Repository 'https://github.com/other/repository.git'
+    Assert-Throws { Get-MaintenancePackageCommit -Package 'Microsoft.Identity.Client' -Version '4.64.0' -PackagePath $invalidPackage } '*official upstream repository*'
+    Assert-Throws { Get-MaintenancePackageCommit -Package 'Microsoft.Identity.Client' -Version '0.0.1' -PackagePath $packagePath } '*Unexpected package identity*'
+    foreach ($invalidCommit in @('', 'short-commit')) {
+        $invalidCommitPath = Join-Path $scratch ('invalid-commit-' + [guid]::NewGuid() + '.nupkg')
+        New-TestPackage -Path $invalidCommitPath -Package 'Microsoft.Identity.Client' -Version '4.64.0' -Commit $invalidCommit
+        Assert-Throws { Get-MaintenancePackageCommit -Package 'Microsoft.Identity.Client' -Version '4.64.0' -PackagePath $invalidCommitPath } '*must identify a full source commit*'
+    }
+    & {
+        $global:maintenanceSourceFixture = @{ git = (Get-Command git -CommandType Application).Source; remote = $sourcePath; commit = $commit }
+        function git {
+            $arguments = @($args | ForEach-Object {
+                if ($_ -ceq 'https://github.com/AzureAD/microsoft-authentication-library-for-dotnet.git') { $global:maintenanceSourceFixture.remote } else { $_ }
+            })
+            & $global:maintenanceSourceFixture.git @arguments
+        }
+        function Invoke-WebRequest {
+            param([string] $Uri, [string] $OutFile, [int] $TimeoutSec)
+            Assert-True ($Uri.StartsWith('https://www.nuget.org/api/v2/package/Microsoft.Identity.Client/')) 'Unexpected synthetic package URL.'
+            New-TestPackage -Path $OutFile -Package 'Microsoft.Identity.Client' -Version $Uri.Split('/')[-1] -Commit $global:maintenanceSourceFixture.commit
+        }
+        try {
+            foreach ($tagCase in @('matches', 'differs', 'unavailable')) {
+                if ($tagCase -ceq 'differs') {
+                    'second synthetic commit' | Set-Content -LiteralPath (Join-Path $sourcePath 'second.txt')
+                    & git -C $sourcePath add second.txt
+                    & git -C $sourcePath -c user.name=MaintenanceTests -c user.email=maintenance@example.invalid commit --quiet -m second
+                    if ($LASTEXITCODE -ne 0) { throw 'Cannot create advisory-tag fixture.' }
+                    & git -C $sourcePath tag --force $console.versionSpec | Out-Null
+                } elseif ($tagCase -ceq 'unavailable') {
+                    & git -C $sourcePath tag --delete $console.versionSpec | Out-Null
+                }
+                $outputPath = Join-Path $scratch "acquire-$tagCase"
+                $preparedPath = & (Join-Path $PSScriptRoot 'Get-MaintenanceSourceEvidence.ps1') -TargetVersion $console.versionSpec -SampleId 'console-cli' -OutputDirectory $outputPath
+                $prepared = Get-Content -LiteralPath $preparedPath -Raw | ConvertFrom-Json
+                Assert-True ($prepared.sourceProvenance -ceq 'nuget-repository-commit' -and $prepared.releases[0].commit -ceq $commit -and $prepared.releases[0].tagObservation.status -ceq $tagCase) 'Advisory tag changed package-commit acquisition.'
+                & (Join-Path $PSScriptRoot 'Validate-Maintenance.ps1') -Package 'Microsoft.Identity.Client' -ExpectedVersion $console.versionSpec -EvidenceManifest $preparedPath -CheckOnly
+            }
+            $wrongCommitPackage = Join-Path $scratch 'wrong-commit.nupkg'
+            $secondCommit = (& git -C $sourcePath rev-parse HEAD).Trim()
+            New-TestPackage -Path $wrongCommitPackage -Package 'Microsoft.Identity.Client' -Version $console.versionSpec -Commit $secondCommit
+            $preparedPackage = Join-Path (Split-Path $preparedPath -Parent) "$($console.versionSpec).nupkg"
+            Copy-Item -LiteralPath $wrongCommitPackage -Destination $preparedPackage -Force
+            Assert-Throws { & (Join-Path $PSScriptRoot 'Validate-Maintenance.ps1') -ExpectedVersion $console.versionSpec -EvidenceManifest $preparedPath -CheckOnly } '*Original NuGet package evidence changed*'
+            $prepared.releases[0].packageSha256 = (Get-FileHash -LiteralPath $preparedPackage -Algorithm SHA256).Hash
+            $prepared | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $preparedPath
+            Assert-Throws { & (Join-Path $PSScriptRoot 'Validate-Maintenance.ps1') -ExpectedVersion $console.versionSpec -EvidenceManifest $preparedPath -CheckOnly } '*does not match the original NuGet-recorded commit*'
+            $global:maintenanceSourceFixture.commit = '0000000000000000000000000000000000000000'
+            Assert-Throws { & (Join-Path $PSScriptRoot 'Get-MaintenanceSourceEvidence.ps1') -TargetVersion $console.versionSpec -SampleId 'console-cli' -OutputDirectory (Join-Path $scratch 'unavailable-commit') } '*Cannot anonymously fetch NuGet-recorded source commit*'
+        } finally {
+            Remove-Variable maintenanceSourceFixture -Scope Global
+        }
+    }
     $catalog = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'maintenance-samples.json') -Raw | ConvertFrom-Json
     $catalog.samples = @($catalog.samples) + $catalog.samples[0]
     $catalog | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $catalogPath

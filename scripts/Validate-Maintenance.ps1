@@ -24,6 +24,7 @@ if ($EvidenceManifest) {
     if (!$ExpectedVersion) { throw 'Evidence validation requires an exact ExpectedVersion.' }
     $evidence = Get-Content -LiteralPath $EvidenceManifest -Raw | ConvertFrom-Json
     if ($evidence.schemaVersion -ne 2 -or $evidence.targetVersion -cne $ExpectedVersion -or
+        $evidence.PSObject.Properties.Name -notcontains 'sourceProvenance' -or $evidence.sourceProvenance -cne 'nuget-repository-commit' -or
         $evidence.repository -cne $source.repositoryUrl -or
         ($evidence.PSObject.Properties.Name -contains 'package' -and $evidence.package -cne $Package) -or
         ($Package -cne 'Microsoft.Identity.Client' -and $evidence.PSObject.Properties.Name -notcontains 'package')) {
@@ -37,7 +38,7 @@ if ($EvidenceManifest) {
         throw 'Source evidence requires unique sample records.'
     }
     foreach ($release in $evidence.releases) {
-        if ($release.version -notmatch '^\d+\.\d+\.\d+$' -or $release.tag -cne $release.version -or
+        if ($release.version -notmatch '^\d+\.\d+\.\d+$' -or
             $release.commit -notmatch '^[0-9a-fA-F]{40}$') {
             throw 'Invalid exact source release identity.'
         }
@@ -47,14 +48,14 @@ if ($EvidenceManifest) {
         }
         $sourceChanges = @(& git -C $release.sourcePath status --porcelain)
         if ($LASTEXITCODE -ne 0 -or $sourceChanges.Count) { throw 'Source evidence checkout has changed.' }
-        $tagCommit = & git -C $evidence.sourceRepositoryPath rev-parse "$($release.tag)^{commit}"
-        if ($LASTEXITCODE -ne 0 -or $tagCommit.Trim() -ine $release.commit) { throw 'Source tag identity changed.' }
         $packagePath = Join-Path (Split-Path $EvidenceManifest -Parent) "$($release.version).nupkg"
         if ((Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash -ine $release.packageSha256) {
             throw 'Original NuGet package evidence changed.'
         }
+        $packageCommit = Get-MaintenancePackageCommit -Package $Package -Version $release.version -PackagePath $packagePath
+        if ($packageCommit -ine $release.commit) { throw 'Source snapshot does not match the original NuGet-recorded commit.' }
     }
-    Write-Host 'PASS: original source/package snapshots and tag identities are unchanged.'
+    Write-Host 'PASS: original source/package snapshots match NuGet-recorded commits and are unchanged; tags are advisory.'
 }
 
 $selected = @(Select-MaintenanceSamples -Samples $samples -Package $Package -SampleId $SampleId)

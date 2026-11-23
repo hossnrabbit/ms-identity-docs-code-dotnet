@@ -22,10 +22,11 @@ must be justified against the selected upstream's exact baseline/target sources.
 - Require an exact stable published package version and verified source evidence.
   The Copilot setup workflow resolves each original reference, downloads the
   required official NuGet packages, verifies
-  their repository commits against exact Git tags, and materializes both SDK
+  their identity/version and official repository metadata, fetches the exact
+  NuGet-recorded commit from that repository, and materializes both SDK
   source trees in `.maintenance-evidence` BEFORE agent execution.
   Before planning, READ `.maintenance-evidence/manifest.json` using file tools.
-  Require schemaVersion 2 and the requested package, official repository, and
+  Require schemaVersion 2, sourceProvenance `nuget-repository-commit`, and the requested package, official repository, and
   exact target. Match each sample's project and originalVersion to
   its original reference, and its targetVersion to the issue. Floating `4.*`
   baselines are resolved once by setup; they are not historical-install evidence.
@@ -38,6 +39,10 @@ must be justified against the selected upstream's exact baseline/target sources.
   setupError and continue only with samples having verified evidence. Samples
   marked newer must also remain unchanged, including their floating references.
   A failed target-release verification blocks the entire task.
+  Release tags are advisory release-note references only. Record each tagObservation
+  (matches/differs/unavailable) without substituting its commit or blocking on it.
+  Missing metadata, an unavailable NuGet-recorded commit, or altered original
+  package/source/diff evidence still blocks the affected scope.
 - Release notes alone are insufficient. Compare relevant public API contracts,
   implementations, SDK tests, and migration guidance across the full baseline to
   target range. Do not compare against the moving SDK main branch. Treat SDK
@@ -107,7 +112,7 @@ Profile files are not an automatic pipeline, and prose rules are not a security
 sandbox. Confirm tool restrictions and delegation in hosted session logs.
 
 The planner returns: status (READY / NO_CHANGE / NEEDS_EVIDENCE / BLOCKED), package, current and
-target versions, manifest path, both exact tag/commit identities, inspected source
+target versions, manifest path, both exact NuGet-recorded commit identities and advisory tag observations, inspected source
 and test paths/symbols with findings, relevant baseline-to-target differences,
 discovery coverage and gaps, the scenario improvement matrix, allowed files,
 justified changes, validation commands, and risks. Each matrix row must include
@@ -170,7 +175,7 @@ Never replace placeholders with real credentials in committed source.
 
 ## PR Summary
 
-Include both source tag/commit identities, inspected SDK source/tests and comparison
+Include both NuGet-recorded source commit identities and advisory tag observations, inspected SDK source/tests and comparison
 findings, release/package evidence, applicability, before/after version, narrowly
 scoped changes, the scenario improvement matrix and discovery limitations,
 implemented/deferred decisions, build/check results, independent-review outcome, and explicit

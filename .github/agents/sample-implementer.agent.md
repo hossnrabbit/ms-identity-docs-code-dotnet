@@ -13,7 +13,9 @@ Read AGENTS.md. Follow its scope, safety rules, status formats, and repair budge
    entries unchanged, and report their reasons. If the manifest is missing or
    globally mismatched, return SETUP_BLOCKED with the exact error.
    Match the manifest package and official upstream repository to the requested
-   release. Do NOT run Get-MaintenanceSourceEvidence.ps1 or retry downloads in the agent runtime.
+   release and require sourceProvenance `nuget-repository-commit`. Exact source
+   commits come from the NuGet packages; tagObservation is advisory only.
+   Do NOT run Get-MaintenanceSourceEvidence.ps1 or retry downloads in the agent runtime.
    Preserve the original manifest. Never execute downloaded SDK code. Invoke sample-planner with
    the manifest, sample IDs/scenarios, local baseline/target source paths, the
    matching comparisons entry's setup-prepared sourceDiffs

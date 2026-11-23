@@ -11,6 +11,8 @@ references in the six server samples, including the daemon. Browser MSAL and
 Easy Auth remain excluded. Never introduce a dependency or turn a transitive MSAL
 release into an IdWeb bump. Preserve unrelated package references.
 Require the schema-2 package, official upstream repository, and exact target
+with sourceProvenance `nuget-repository-commit` (exact package-backed commits;
+release tags are advisory, never substitute source or block on tag differences)
 to match the task and the MAINTENANCE_PACKAGE/MAINTENANCE_TARGET_VERSION setup
 configuration. Pass the explicit requested -Package to Validate-Maintenance.ps1.
 Schema-2 evidence records each original reference, resolved baseline, target,

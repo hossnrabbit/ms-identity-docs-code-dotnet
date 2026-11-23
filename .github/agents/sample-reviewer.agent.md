@@ -13,7 +13,9 @@ Review the exact revision supplied by the implementer. Confirm the change matche
 the manifest's package, official upstream repository, and verified release.
 Reject cross-upstream version substitutions, invented direct references, or
 changes to packages other than the requested one. Confirm the plan cites actual local SDK source
-and tests from BOTH tagged commits. Spot-check relevant symbols yourself using
+and tests from BOTH NuGet-recorded commits. Require sourceProvenance
+`nuget-repository-commit`; tag observations are advisory, not source identity.
+Spot-check relevant symbols yourself using
 the supplied local paths. Release notes alone or comparison against SDK main do
 not satisfy this review. Verify the full baseline-to-target range was considered.
 Require the scenario improvement matrix and discovery coverage, including public

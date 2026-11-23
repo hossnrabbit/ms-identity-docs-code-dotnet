@@ -88,6 +88,34 @@ function Get-MaintenanceSource {
     }
 }
 
+function Get-MaintenancePackageCommit {
+    param([string] $Package, [string] $Version, [string] $PackagePath)
+
+    $source = Get-MaintenanceSource -Package $Package
+    $archive = [System.IO.Compression.ZipFile]::OpenRead($PackagePath)
+    try {
+        $entries = @($archive.Entries | Where-Object FullName -ceq "$Package.nuspec")
+        if ($entries.Count -ne 1) { throw 'Package must contain exactly one expected nuspec.' }
+        $reader = [System.IO.StreamReader]::new($entries[0].Open())
+        try { [xml] $nuspec = $reader.ReadToEnd() } finally { $reader.Dispose() }
+    } finally { $archive.Dispose() }
+    $metadata = $nuspec.SelectSingleNode('/*[local-name()="package"]/*[local-name()="metadata"]')
+    if (!$metadata) { throw 'Package metadata is missing.' }
+    $identity = $metadata.SelectSingleNode('*[local-name()="id"]')
+    $versionNode = $metadata.SelectSingleNode('*[local-name()="version"]')
+    $repository = $metadata.SelectSingleNode('*[local-name()="repository"]')
+    if (!$identity -or !$versionNode -or !$repository -or $identity.InnerText -cne $Package -or $versionNode.InnerText -cne $Version) {
+        throw 'Unexpected package identity or missing repository metadata.'
+    }
+    $allowedUrls = @($source.repositoryUrl, $source.repositoryUrl.Substring(0, $source.repositoryUrl.Length - 4))
+    if ($repository.GetAttribute('url').TrimEnd('/') -notin $allowedUrls) {
+        throw 'Package repository metadata does not identify the selected official upstream repository.'
+    }
+    $commit = $repository.GetAttribute('commit')
+    if ($commit -notmatch '^[0-9a-fA-F]{40}$') { throw 'Package must identify a full source commit.' }
+    $commit.ToLowerInvariant()
+}
+
 function Select-MaintenanceSamples {
     param([object[]] $Samples, [string] $Package = 'Microsoft.Identity.Client', [string[]] $SampleId)
 

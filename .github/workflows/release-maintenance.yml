@@ -168,7 +168,7 @@ jobs:
                 `Evaluate ${packageId} ${version} from ${upstream} using the shared sample harness.`,
                 'Read scripts/maintenance-samples.json and select only existing direct references to this package using Select-MaintenanceSamples. Never introduce a dependency or turn an MSAL release into an IdWeb version bump.',
                 `Official release evidence: ${evidence}`,
-                'Detection only: Copilot assignment is disabled. The release tag URL is a candidate until verified. A maintainer must approve matching setup and resolve provenance before any update. Floating references are unresolved, not proof of an outdated installed package.',
+                'Detection only: Copilot assignment is disabled. Release tags are advisory references. Matching trusted setup must verify package identity/version, official repository metadata, and exact NuGet-recorded commits before any update. Floating references are unresolved, not proof of an outdated installed package.',
                 '',
                 'Use AGENTS.md and the sample-implementer profile with its planner and reviewer roles.',
                 `Before planning or editing, READ schema-2 .maintenance-evidence/manifest.json prepared by Copilot setup. Its package must match ${packageId}, repository must match https://github.com/${upstream}.git, and target must match ${version}; check each originalVersion, resolved baselineVersion, status, and matching comparisons entry.`,
