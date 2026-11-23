@@ -158,8 +158,10 @@ From the repository root, run PowerShell 7:
 
 For maintenance tasks also pass `-Package <requested-package>` and
 `-EvidenceManifest <original-manifest-path>`.
-For a narrower issue, pass `-SampleId` with its permitted sample IDs. The script
-verifies each sample's original frameworks, exact target, baseline-specific
+For a narrower issue, pass `-SampleId` with its permitted sample IDs.
+The trusted-setup-only `-SetupCheck -CheckOnly` mode checks pristine references;
+never use SetupCheck to validate an implemented update or claim a build.
+Normal validation verifies each sample's original frameworks, exact target, baseline-specific
 source/diff hashes, and immutable snapshots. Newer and setup-blocked samples
 retain their original references. Default host builds cover console-cli and,
 on Windows, desktop projects. Linux cannot build Windows UI projects. MAUI needs

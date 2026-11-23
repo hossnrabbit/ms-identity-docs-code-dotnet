@@ -173,6 +173,21 @@ try {
     $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifestPath
     & (Join-Path $PSScriptRoot 'Validate-Maintenance.ps1') -ExpectedVersion $console.versionSpec -EvidenceManifest $manifestPath -CheckOnly
     $diffs[1].name = 'sdk-client'
+    $setupManifest = $manifest | ConvertTo-Json -Depth 12 | ConvertFrom-Json
+    $setupManifest.targetVersion = '4.91.1'
+    $setupTarget = $setupManifest.releases[0] | ConvertTo-Json | ConvertFrom-Json
+    $setupTarget.version = '4.91.1'
+    $setupTarget.packageSha256 = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash
+    $setupManifest.releases = @($setupManifest.releases[0], $setupTarget)
+    $setupManifest.samples[0].targetVersion = '4.91.1'
+    $setupManifest.samples[0].status = 'update'
+    $setupManifest.comparisons[0].targetVersion = '4.91.1'
+    $setupManifest.comparisons[0].sourceDiffs[1].name = 'scenario-apis'
+    $setupManifestPath = Join-Path $scratch 'setup-manifest.json'
+    $setupManifest | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $setupManifestPath
+    & (Join-Path $PSScriptRoot 'Validate-Maintenance.ps1') -ExpectedVersion '4.91.1' -EvidenceManifest $setupManifestPath -CheckOnly -SetupCheck
+    Assert-Throws { & (Join-Path $PSScriptRoot 'Validate-Maintenance.ps1') -ExpectedVersion '4.91.1' -EvidenceManifest $setupManifestPath -CheckOnly } '*Expected console-cli Microsoft.Identity.Client reference 4.91.1*'
+    Assert-Throws { & (Join-Path $PSScriptRoot 'Validate-Maintenance.ps1') -ExpectedVersion '4.91.1' -EvidenceManifest $setupManifestPath -SetupCheck } '*SetupCheck requires original evidence and CheckOnly*'
     $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifestPath
     Assert-Throws { & (Join-Path $PSScriptRoot 'Validate-Maintenance.ps1') -ExpectedVersion $console.versionSpec -EvidenceManifest $manifestPath -CheckOnly } '*both distinct diff families*'
     $diffs[1].name = 'scenario-apis'
@@ -215,7 +230,7 @@ try {
         Assert-Throws { Get-MaintenancePackageCommit -Package 'Microsoft.Identity.Client' -Version '4.64.0' -PackagePath $invalidCommitPath } '*must identify a full source commit*'
     }
     & {
-        $global:maintenanceSourceFixture = @{ git = (Get-Command git -CommandType Application).Source; remote = $sourcePath; commit = $commit }
+        $global:maintenanceSourceFixture = @{ git = (Get-Command git -CommandType Application | Select-Object -First 1).Source; remote = $sourcePath; commit = $commit }
         function git {
             $arguments = @($args | ForEach-Object {
                 if ($_ -ceq 'https://github.com/AzureAD/microsoft-authentication-library-for-dotnet.git') { $global:maintenanceSourceFixture.remote } else { $_ }

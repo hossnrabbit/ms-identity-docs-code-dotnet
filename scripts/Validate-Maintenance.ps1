@@ -8,12 +8,14 @@ param(
     [ValidateSet('host', 'any', 'windows', 'maui', 'all')]
     [string] $BuildPlatform = 'host',
     [switch] $CheckOnly,
+    [switch] $SetupCheck,
     [switch] $RequireAllBuilds
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Maintenance.Common.ps1')
+if ($SetupCheck -and (!$CheckOnly -or !$EvidenceManifest -or $RequireAllBuilds)) { throw 'SetupCheck requires original evidence and CheckOnly; it cannot validate updated builds.' }
 $repositoryRoot = Split-Path $PSScriptRoot -Parent
 $samples = @(Get-MaintenanceSamples)
 $source = Get-MaintenanceSource -Package $Package
@@ -113,6 +115,7 @@ foreach ($sample in $selected) {
             }
         }
     }
+    if ($SetupCheck) { $expected = $record.originalVersion }
     if ($expected -and $sample.versionSpec -cne $expected) {
         throw "Expected $($sample.id) $Package reference $expected but found $($sample.versionSpec)."
     }

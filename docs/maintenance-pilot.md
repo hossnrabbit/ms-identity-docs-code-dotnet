@@ -61,6 +61,14 @@ warnings, not source blockers. Missing/invalid metadata, the wrong official
 repository, unavailable declared commits, and altered evidence remain blockers.
 The historical runs below retain their original strict-tag outcomes.
 
+Manual shared setup can accept `smoke_sample` for one existing cross-platform
+sample. It temporarily pins only that direct package reference, runs strict
+evidence-aware validation and a required hosted build, restores the exact original
+project bytes, and verifies the checkout is pristine. This exercises the
+source-to-update/build path; it is not an agent discovery assessment or reviewed PR.
+Trusted setup uses `-SetupCheck -CheckOnly` to validate original references;
+normal update validation remains strict and must not use SetupCheck.
+
 ## Historical Live Fork Test: 2026-11-23
 
 The unified harness and retired duplicate entry point are published on their
