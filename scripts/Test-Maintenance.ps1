@@ -53,17 +53,26 @@ Assert-Throws { & (Join-Path $PSScriptRoot 'Get-MsalSourceEvidence.ps1') -Packag
 if ($IsWindows) {
     & {
         $global:maintenanceTestDotnetCalls = [System.Collections.Generic.List[object]]::new()
+        $global:maintenanceTestMsbuildCalls = [System.Collections.Generic.List[object]]::new()
         function dotnet {
             $global:maintenanceTestDotnetCalls.Add(@($args))
             $global:LASTEXITCODE = 0
         }
+        function msbuild {
+            $global:maintenanceTestMsbuildCalls.Add(@($args))
+            $global:LASTEXITCODE = 0
+        }
         try {
-            & (Join-Path $PSScriptRoot 'Validate-Maintenance.ps1') -SampleId 'desktop-winui' -BuildPlatform windows -RequireAllBuilds
+            & (Join-Path $PSScriptRoot 'Validate-Maintenance.ps1') -SampleId 'desktop-winforms' -BuildPlatform windows -RequireAllBuilds
             Assert-True ($global:maintenanceTestDotnetCalls.Count -eq 2) 'Expected mocked restore and build.'
             Assert-True ($global:maintenanceTestDotnetCalls[0].Count -eq 5 -and $global:maintenanceTestDotnetCalls[0][-1] -ceq '-p:Platform=x64') 'Restore platform argument was split.'
             Assert-True ($global:maintenanceTestDotnetCalls[1].Count -eq 8 -and $global:maintenanceTestDotnetCalls[1][-1] -ceq '-p:Platform=x64') 'Build platform argument was split.'
+            & (Join-Path $PSScriptRoot 'Validate-Maintenance.ps1') -SampleId 'desktop-winui' -BuildPlatform windows -RequireAllBuilds
+            Assert-True ($global:maintenanceTestDotnetCalls.Count -eq 3 -and $global:maintenanceTestDotnetCalls[2][0] -ceq 'restore') 'WinUI must not use dotnet build for its CLR4 XAML compiler.'
+            Assert-True ($global:maintenanceTestMsbuildCalls.Count -eq 1 -and $global:maintenanceTestMsbuildCalls[0].Count -eq 5 -and $global:maintenanceTestMsbuildCalls[0][-1] -ceq '-p:Platform=x64') 'WinUI must use full-framework MSBuild with intact platform arguments.'
         } finally {
             Remove-Variable maintenanceTestDotnetCalls -Scope Global
+            Remove-Variable maintenanceTestMsbuildCalls -Scope Global
         }
     }
 }

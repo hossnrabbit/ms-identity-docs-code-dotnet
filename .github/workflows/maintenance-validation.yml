@@ -115,6 +115,8 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
+      - uses: microsoft/setup-msbuild@v2
+        if: matrix.sample == 'desktop-winui'
       - name: Validate desktop project and require its Windows build
         shell: pwsh
         env:

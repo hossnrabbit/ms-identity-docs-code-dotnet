@@ -142,7 +142,11 @@ foreach ($sample in $selected) {
     Write-Host "Validating $($sample.id) with $Package reference $($sample.versionSpec)."
     & dotnet restore $projectPath --verbosity minimal @properties
     if ($LASTEXITCODE -ne 0) { throw "Sample restore failed: $($sample.id)." }
-    & dotnet build $projectPath --configuration Release --no-restore --verbosity minimal @properties
+    if ($sample.id -ceq 'desktop-winui') {
+        & msbuild $projectPath '-target:Build' '-property:Configuration=Release' '-verbosity:minimal' @properties
+    } else {
+        & dotnet build $projectPath --configuration Release --no-restore --verbosity minimal @properties
+    }
     if ($LASTEXITCODE -ne 0) { throw "Sample build failed: $($sample.id)." }
     $built++
 }
