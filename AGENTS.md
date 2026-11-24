@@ -43,6 +43,9 @@ must be justified against the selected upstream's exact baseline/target sources.
   (matches/differs/unavailable) without substituting its commit or blocking on it.
   Missing metadata, an unavailable NuGet-recorded commit, or altered original
   package/source/diff evidence still blocks the affected scope.
+  If setup supplies `MAINTENANCE_DEPENDENCY_MANIFEST`, also read that original
+  supplement and its baseline/target restore graphs and NuGet-pinned Abstractions
+  sources. Supplemental contracts do not authorize changing unrelated references.
 - Release notes alone are insufficient. Compare relevant public API contracts,
   implementations, SDK tests, and migration guidance across the full baseline to
   target range. Do not compare against the moving SDK main branch. Treat SDK

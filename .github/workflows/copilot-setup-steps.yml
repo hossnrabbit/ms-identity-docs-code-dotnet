@@ -15,6 +15,10 @@ on:
         description: Optional existing cross-platform sample for disposable exact-version build smoke
         required: false
         type: string
+      dependency_sample:
+        description: Optional pristine Web sample for supplemental Abstractions source and dependency graphs
+        required: false
+        type: string
   pull_request:
     paths:
       - .github/workflows/copilot-setup-steps.yml
@@ -43,6 +47,7 @@ jobs:
         env:
           SOURCE_PACKAGE: ${{ inputs.package || vars.MAINTENANCE_PACKAGE }}
           SOURCE_TARGET_VERSION: ${{ inputs.target_version || vars.MAINTENANCE_TARGET_VERSION }}
+          DEPENDENCY_SAMPLE: ${{ inputs.dependency_sample }}
         run: |
           $ErrorActionPreference = 'Stop'
           if (!$env:SOURCE_PACKAGE) { $env:SOURCE_PACKAGE = $env:MAINTENANCE_PACKAGE }
@@ -70,6 +75,13 @@ jobs:
             Write-Host "Prepared $($manifest.package) $($release.version), NuGet commit $($release.commit), advisory tag $($release.tagObservation.status): $($release.sourcePath)"
           }
           ./scripts/Validate-Maintenance.ps1 -Package $env:SOURCE_PACKAGE -ExpectedVersion $env:SOURCE_TARGET_VERSION -EvidenceManifest $manifestPath -CheckOnly -SetupCheck
+          if (!$env:DEPENDENCY_SAMPLE) { $env:DEPENDENCY_SAMPLE = $env:MAINTENANCE_DEPENDENCY_SAMPLE }
+          if ($env:DEPENDENCY_SAMPLE) {
+            $dependencyPath = ./scripts/Get-MaintenanceDependencyEvidence.ps1 -EvidenceManifest $manifestPath -SampleId $env:DEPENDENCY_SAMPLE
+            ./scripts/Validate-Maintenance.ps1 -Package $env:SOURCE_PACKAGE -ExpectedVersion $env:SOURCE_TARGET_VERSION -EvidenceManifest $manifestPath -CheckOnly -SetupCheck
+            "MAINTENANCE_DEPENDENCY_MANIFEST=$dependencyPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            "Prepared supplemental dependency/source evidence: $dependencyPath" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+          }
           "MAINTENANCE_SOURCE_MANIFEST=$manifestPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "Prepared source evidence: $manifestPath" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
           $manifest.samples | Select-Object id, originalVersion, baselineVersion, targetVersion, status, setupError |
