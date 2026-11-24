@@ -47,7 +47,7 @@ jobs:
         env:
           SOURCE_PACKAGE: ${{ inputs.package || vars.MAINTENANCE_PACKAGE }}
           SOURCE_TARGET_VERSION: ${{ inputs.target_version || vars.MAINTENANCE_TARGET_VERSION }}
-          DEPENDENCY_SAMPLE: ${{ inputs.dependency_sample }}
+          DEPENDENCY_SAMPLE: ${{ inputs.dependency_sample || vars.MAINTENANCE_DEPENDENCY_SAMPLE }}
         run: |
           $ErrorActionPreference = 'Stop'
           if (!$env:SOURCE_PACKAGE) { $env:SOURCE_PACKAGE = $env:MAINTENANCE_PACKAGE }
