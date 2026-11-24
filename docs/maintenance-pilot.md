@@ -12,8 +12,9 @@ There is ONE harness on `test/msal-harness-e2e` for releases from either
 `AzureAD/microsoft-identity-web`. The branch name is retained for compatibility,
 not SDK-specific routing. The earlier IdWeb-specific test entry point is retired.
 One catalog, detector, evidence schema, validator, and implementer/planner/reviewer
-process select the relevant upstream from the requested package. No default
-branch is changed. Supporting another package does not require another harness.
+process select the relevant upstream from the requested package. The approved
+fork-default bootstrap now imports this shared setup and the three tested agent
+profiles. Supporting another package does not require another harness.
 
 On the published test branch, dispatch `Release maintenance issue`
 on this test branch with `detect_latest=true` and `dry_run=true`. Leave version,
@@ -33,14 +34,14 @@ The official tag URL is a candidate, not verified source evidence.
 
 There is no automatic Copilot assignment, PAT requirement, or ADO dependency in
 this test workflow. Detection is not source-update approval. Future agent work
-still requires approved no-PAT authentication, verified test-branch setup import,
+still requires matching non-secret Agents configuration, verified test-branch setup import,
 matching original evidence, provenance checks, and independent planning/review.
 Never downgrade or introduce MSAL into wrapper/browser/Easy Auth samples.
 
 The weekday 07:37 UTC cron is intentionally inactive: GitHub schedules execute
 only workflows on the default branch, and this job also requires the test ref.
 Publishing or dispatching this branch does not activate periodic execution.
-Default-branch activation and corresponding guard changes require separate
+Periodic default-branch activation and corresponding guard changes require separate
 approval. No commit, push, live feed query, issue creation, or hosted result is
 implied by local offline tests.
 
@@ -69,12 +70,75 @@ source-to-update/build path; it is not an agent discovery assessment or reviewed
 Trusted setup uses `-SetupCheck -CheckOnly` to validate original references;
 normal update validation remains strict and must not use SetupCheck.
 
+## Latest Reviewed-Agent Trials
+
+The user approved changing this fork's default bootstrap. Commit
+`6abdf957d401bb7ac46091066c1b4f0c1557d784` copied exactly the shared setup workflow
+and three tested agent profiles. A workflow-only follow-up at
+`ebe0ee18a1b1041f27f6b8f00969b273556ba5df` reads imported Agents environment
+variables when explicit workflow inputs are absent. Both updates were non-forced
+and verified against the exact tested blobs. No sample, discovery schedule,
+secret, permission policy, upstream repository, or retired fork was changed.
+
+GitHub does not pass repository Actions variables to Copilot sessions. The first
+Client task consequently stopped SETUP_BLOCKED with no sample changes:
+[run 45284153738](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/actions/runs/45284153738).
+Its empty [PR 24](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/pull/24)
+was verified and closed. Separate repository Agents variables supplied matching
+package/target values for the repaired Client trial and then the IdWeb trial.
+After both sessions completed, those two temporary variables were deleted;
+Agents variables are again empty and the original Actions dispatcher variable
+remains unchanged. New sessions must configure their matching target explicitly.
+
+| Trial | Actual result | Evidence |
+| --- | --- | --- |
+| Client 4.64.0 to 4.92.0, console-cli | Matching NuGet-backed setup; real planner READY before edits; first reviewer CHANGES_REQUIRED, one evidence/handoff repair, second reviewer PASS on `2f9b7cff0260013466ad982767cf78155f9d7ae5`; original-manifest validation and required console build passed | [Task](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/tasks/760feb95-a2a2-4174-96bb-2edf2a522571), [agent run 45284770473](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/actions/runs/45284770473), [draft PR 25](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/pull/25) |
+| Client final hosted matrix | All 11 jobs PASS on composite `539020600aa1d8febf757eee06d795fbcfea52db`; three reviewed sample blobs unchanged; separate maintainer fixture-only follow-up | [Run 45444954329](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/actions/runs/45444954329) |
+| Web 3.1.0 to 4.18.0, web-api-obo-client | Matching NuGet-backed setup; planner NEEDS_EVIDENCE then BLOCKED on missing Abstractions public contracts and resolved mixed-version graph; zero files changed, no reviewer or updated-sample validation | [Task](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/tasks/2f952e40-0b12-476f-9177-788d49fabd09), [agent run 45287606724](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/actions/runs/45287606724), [blocked draft PR 26](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/pull/26) |
+
+The Client sample pins 4.92.0, forwards silent-acquisition exception claims to
+the existing device-code fallback, and propagates best-effort Ctrl+C cancellation
+through token acquisition and Graph requests with handler cleanup. Graph-issued
+claims-challenge discovery/retry and persistent cache snapshots were deferred;
+other discovered candidates were explicitly classified, not silently adopted.
+The actual SDK source/test inspection and role handoffs are in session
+`c07995ba-0a77-4dcd-a0ad-ca0137f53a03`, available with `gh agent-task view --log`.
+
+The first final Client matrix
+[45287580215](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/actions/runs/45287580215)
+passed all ten sample builds but failed the synthetic setup fixture: its
+hard-coded 4.91.1 target was older than the newly updated console reference.
+The fixture-only repair at `0d7e1510a60bb7f917cbe705d9c0ca2da22bf9ac` derives a
+strictly newer synthetic target; offline checks passed against both 4.64.0 and
+an isolated 4.92.0 project. Production disposition checks were not weakened.
+The same fixture blob was applied to PR 25 without changing any reviewed sample
+blob. Its three-way PR diff therefore contains the three sample files plus that
+one test script. The independent verdict is bound to the original sample
+revision, not claimed as a new review of the composite commit. No additional
+review, merge, approval-policy change, or review-budget reset was performed.
+
+IdWeb source verification succeeded at baseline
+`63bc10edb7052622c6d4aee0e32e68000dee94ae` and target
+`df82ea2c21e2fde81c3deb56578654b05fd59676`; the target's unavailable tag remained
+advisory. The missing evidence concerns Microsoft.Identity.Abstractions contracts
+and the graph combining Web 4.18.0 with the preserved DownstreamApi 3.1.0 reference.
+This is not a provenance failure. An approved extension to trusted setup must
+supply that evidence before resuming the existing blocked trial, not bypass the
+planner or reset its budget through another issue. A green agent job alone is
+not an implemented or reviewed IdWeb update.
+
+Both PRs remain draft and unmerged. SDK unit tests, live sign-in, claims and
+cancellation integration tests, and MAUI builds were NOT RUN. Client dependency
+vulnerability analysis was NOT RUN after its tool could not authenticate.
+
 ## Live NuGet-Commit Test: 2026-11-23
 
 Published runtime `4de4bbb83106b29ddb2ab2d0fc99943105b15d13` passes both
 package-selected source-to-update/build smokes and all eleven baseline validation
 jobs. This supersedes the historical tag-only source blockers, not the remaining
-real-agent setup prerequisite. No sample changes were retained or published.
+real-agent setup prerequisite at that point. No sample changes were retained
+from these historical smokes; the latest actual trials above supersede their
+default-bootstrap and implementation status.
 
 | Check | Verified result | Evidence |
 | --- | --- | --- |
@@ -98,8 +162,8 @@ Actions; successful tests now explicitly return zero. Setup-only validation also
 uses the separately tested `-SetupCheck -CheckOnly` gate for pristine references;
 normal target/update validation remains strict. Final runs above include these fixes.
 
-GitHub's actual registered default-branch setup still invokes the forwarding shim
-with `MSAL_SOURCE_TARGET_VERSION=4.91.1`. No default branch, setup variables,
+At the time of this guard probe, GitHub's registered default-branch setup still
+invoked the forwarding shim with `MSAL_SOURCE_TARGET_VERSION=4.91.1`. No default branch, setup variables,
 secrets, permission policies, schedules, or issue assignment state was changed.
 The read-only task stopped on that mismatch without an implementation or review.
 The service created an empty draft despite `create_pull_request=false`; its
@@ -108,7 +172,7 @@ to contain zero changed files and closed. Its service-created initial-plan commi
 is not a maintenance implementation. Historical issue 18/PR 19 remain untouched;
 issue 21 remains open/unassigned and issue 22 remains closed/unassigned.
 
-A real reviewed latest-target agent update is still BLOCKED pending explicit
+At that point, a real reviewed latest-target agent update was BLOCKED pending explicit
 approval to activate matching shared setup on the default branch and configure
 the non-secret package/target variables. Standalone smoke success cannot supply
 evidence to another agent session. No independent planner/reviewer or final
@@ -203,8 +267,12 @@ package hashes, comparison hashes, and the required sourceProvenance policy.
 applicable existing references. Package defaults remain MSAL-compatible for old
 callers, but all agent tasks must pass the issue's explicit package.
 
-Before a future agent session, a maintainer must set matching non-secret Actions
+Before a future agent session, a maintainer must set matching non-secret Agents
 variables `MAINTENANCE_PACKAGE` and `MAINTENANCE_TARGET_VERSION`. The setup workflow
+reads their imported environment values; repository Actions variables do not
+configure a Copilot session. GitHub's repository Agents variables REST API is
+`repos/{owner}/{repo}/agents/variables`, separate from Actions variables.
+The workflow
 also accepts explicit `package` and `target_version` inputs for a hosted smoke
 test. A standalone smoke test does not prove agent setup import. There is no
 automatic fallback version or concurrent-target agent setup. Missing/mismatched
@@ -221,7 +289,9 @@ well as the existing console and Windows clients. Legacy MAUI remains gated.
 Current automation still stops at issue creation: automatic agent assignment is
 disabled. Package-selected test-branch setup import and strict provenance remain
 prerequisites for unattended code-update PRs. The live record above verifies
-hosted baseline builds and the bounded MSAL handoff probe, not a real update PR.
+an actual reviewed Client sample update and its separate final hosted matrix;
+the actual IdWeb trial remains blocked before editing. This is not unattended
+rollout or evidence of live authentication behavior.
 
 ## Historical Prototype Setup (Not For This Test Branch)
 
