@@ -174,20 +174,27 @@ try {
     & (Join-Path $PSScriptRoot 'Validate-Maintenance.ps1') -ExpectedVersion $console.versionSpec -EvidenceManifest $manifestPath -CheckOnly
     $diffs[1].name = 'sdk-client'
     $setupManifest = $manifest | ConvertTo-Json -Depth 12 | ConvertFrom-Json
-    $setupManifest.targetVersion = '4.91.1'
+    $consoleVersion = [version] $console.versionSpec
+    $setupVersion = '{0}.{1}.{2}' -f $consoleVersion.Major, $consoleVersion.Minor, ($consoleVersion.Build + 1)
+    $setupPackagePath = Join-Path $scratch "$setupVersion.nupkg"
+    if (!(Test-Path -LiteralPath $setupPackagePath)) {
+        New-TestPackage -Path $setupPackagePath -Package 'Microsoft.Identity.Client' -Version $setupVersion -Commit $commit
+    }
+    $setupManifest.targetVersion = $setupVersion
     $setupTarget = $setupManifest.releases[0] | ConvertTo-Json | ConvertFrom-Json
-    $setupTarget.version = '4.91.1'
-    $setupTarget.packageSha256 = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash
+    $setupTarget.version = $setupVersion
+    $setupTarget.tag = $setupVersion
+    $setupTarget.packageSha256 = (Get-FileHash -LiteralPath $setupPackagePath -Algorithm SHA256).Hash
     $setupManifest.releases = @($setupManifest.releases[0], $setupTarget)
-    $setupManifest.samples[0].targetVersion = '4.91.1'
+    $setupManifest.samples[0].targetVersion = $setupVersion
     $setupManifest.samples[0].status = 'update'
-    $setupManifest.comparisons[0].targetVersion = '4.91.1'
+    $setupManifest.comparisons[0].targetVersion = $setupVersion
     $setupManifest.comparisons[0].sourceDiffs[1].name = 'scenario-apis'
     $setupManifestPath = Join-Path $scratch 'setup-manifest.json'
     $setupManifest | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $setupManifestPath
-    & (Join-Path $PSScriptRoot 'Validate-Maintenance.ps1') -ExpectedVersion '4.91.1' -EvidenceManifest $setupManifestPath -CheckOnly -SetupCheck
-    Assert-Throws { & (Join-Path $PSScriptRoot 'Validate-Maintenance.ps1') -ExpectedVersion '4.91.1' -EvidenceManifest $setupManifestPath -CheckOnly } '*Expected console-cli Microsoft.Identity.Client reference 4.91.1*'
-    Assert-Throws { & (Join-Path $PSScriptRoot 'Validate-Maintenance.ps1') -ExpectedVersion '4.91.1' -EvidenceManifest $setupManifestPath -SetupCheck } '*SetupCheck requires original evidence and CheckOnly*'
+    & (Join-Path $PSScriptRoot 'Validate-Maintenance.ps1') -ExpectedVersion $setupVersion -EvidenceManifest $setupManifestPath -CheckOnly -SetupCheck
+    Assert-Throws { & (Join-Path $PSScriptRoot 'Validate-Maintenance.ps1') -ExpectedVersion $setupVersion -EvidenceManifest $setupManifestPath -CheckOnly } "*Expected console-cli Microsoft.Identity.Client reference $setupVersion*"
+    Assert-Throws { & (Join-Path $PSScriptRoot 'Validate-Maintenance.ps1') -ExpectedVersion $setupVersion -EvidenceManifest $setupManifestPath -SetupCheck } '*SetupCheck requires original evidence and CheckOnly*'
     $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifestPath
     Assert-Throws { & (Join-Path $PSScriptRoot 'Validate-Maintenance.ps1') -ExpectedVersion $console.versionSpec -EvidenceManifest $manifestPath -CheckOnly } '*both distinct diff families*'
     $diffs[1].name = 'scenario-apis'
