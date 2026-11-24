@@ -76,6 +76,8 @@ dotnet run
 
 Follow the device code flow instructions that are presented. If everything worked, you should receive a response similar to this:
 
+Press **Ctrl+C** to request cancellation while MSAL is acquiring a token or while the sample is making the Graph request. Cancellation is best effort; work already completed or not observing the cancellation token may continue.
+
 ```json
 {
   "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#users/$entity",
