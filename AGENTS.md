@@ -62,8 +62,9 @@ must be justified against the selected upstream's exact baseline/target sources.
   sources, packages, or manifest. `.maintenance-evidence` is ignored by Git.
   A maintainer must configure matching `MAINTENANCE_PACKAGE` and
   `MAINTENANCE_TARGET_VERSION` repository Agents variables BEFORE a new session.
-  Actions variables are not transported into Copilot sessions; setup reads the
-  imported Agents environment variables when explicit workflow inputs are absent.
+  Actions variables do not configure Copilot sessions. Setup maps Agents variable
+  expressions into step-level environment values when workflow inputs are absent;
+  runtime process variables alone are insufficient during imported setup.
   There is no automatic source/version fallback. Explicit setup workflow inputs
   are for smoke tests, not proof that agent setup imported the matching evidence.
   Never treat a different prepared target as equivalent to the requested release.

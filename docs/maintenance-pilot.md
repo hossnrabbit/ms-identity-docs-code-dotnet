@@ -95,6 +95,9 @@ remains unchanged. New sessions must configure their matching target explicitly.
 | Client 4.64.0 to 4.92.0, console-cli | Matching NuGet-backed setup; real planner READY before edits; first reviewer CHANGES_REQUIRED, one evidence/handoff repair, second reviewer PASS on `2f9b7cff0260013466ad982767cf78155f9d7ae5`; original-manifest validation and required console build passed | [Task](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/tasks/760feb95-a2a2-4174-96bb-2edf2a522571), [agent run 45284770473](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/actions/runs/45284770473), [draft PR 25](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/pull/25) |
 | Client final hosted matrix | All 11 jobs PASS on composite `539020600aa1d8febf757eee06d795fbcfea52db`; three reviewed sample blobs unchanged; separate maintainer fixture-only follow-up | [Run 45444954329](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/actions/runs/45444954329) |
 | Web 3.1.0 to 4.18.0, web-api-obo-client | Matching NuGet-backed setup; planner NEEDS_EVIDENCE then BLOCKED on missing Abstractions public contracts and resolved mixed-version graph; zero files changed, no reviewer or updated-sample validation | [Task](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/tasks/2f952e40-0b12-476f-9177-788d49fabd09), [agent run 45287606724](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/actions/runs/45287606724), [blocked draft PR 26](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/pull/26) |
+| Approved supplemental Web source/dependency smoke | PASS; original references preserved except disposable Web target; Abstractions source and both graphs verified; required disposable build passed and original project restored | [Run 45447581069](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/actions/runs/45447581069) |
+| Same Web trial after supplemental import | Actual imported supplement verified; real planner NEEDS_EVIDENCE then BLOCKED on the expanded interface/mixed-graph compatibility boundary; no application edits, reviews, repairs or candidate build | [Task](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/tasks/c3824699-30c2-40c5-b354-c5d12399a246), [agent run 45449009768](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/actions/runs/45449009768), [source-backed blocker matrix](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/pull/26#issuecomment-7139432962) |
+| Supplemental bootstrap hosted matrix | All 11 jobs PASS on unchanged application head `8d49822e5eed1721ba9f733082216e2e2e915515`; harness-only bootstrap, not a reviewed Web update | [Run 45449009417](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/actions/runs/45449009417) |
 
 The Client sample pins 4.92.0, forwards silent-acquisition exception claims to
 the existing device-code fallback, and propagates best-effort Ctrl+C cancellation
@@ -122,10 +125,40 @@ IdWeb source verification succeeded at baseline
 `df82ea2c21e2fde81c3deb56578654b05fd59676`; the target's unavailable tag remained
 advisory. The missing evidence concerns Microsoft.Identity.Abstractions contracts
 and the graph combining Web 4.18.0 with the preserved DownstreamApi 3.1.0 reference.
-This is not a provenance failure. An approved extension to trusted setup must
-supply that evidence before resuming the existing blocked trial, not bypass the
-planner or reset its budget through another issue. A green agent job alone is
-not an implemented or reviewed IdWeb update.
+This is not a provenance failure. The approved extension now supplies both
+original restore graphs and NuGet-pinned Abstractions source. Its first imported
+attempt stopped before planning because the optional selector was missing at
+setup time; the workflow-only expression repair made the subsequent import pass.
+Both continuations reused PR 26 and its original review budget, not a new issue.
+A green agent job alone is not an implemented or reviewed IdWeb update.
+
+The supplemented baseline resolves Abstractions 6.0.0 at
+`0e09887e30dfbe3dd28230e3f3028e0b3ee1e312`; the target resolves 12.7.0 at
+`76944ea3aa506494c16f7b1a67ec83538f631ba6`, from the official
+`AzureAD/microsoft-identity-abstractions-for-dotnet` package repositories. The
+target graph preserves DownstreamApi 3.1.0 but uses Web/TokenAcquisition 4.18.0
+and Abstractions 12.7.0/net8. That interface adds abstract `JsonTypeInfo` overloads
+not found in the old downstream implementation. The planner could not establish
+safe type loading/DI for this exact mixed graph; restore or compilation does not
+settle it. No runtime failure is claimed. The durable matrix is explicitly
+provisional, with unresolved coverage, not a discovery PASS.
+
+Session `74f13c7a-cd93-40c4-8737-9a8a327b5a63` supplied both manifests to the
+real planner, then additional bounded source evidence after NEEDS_EVIDENCE; its
+final verdict remained BLOCKED. No application candidate, reviewer or required
+candidate build exists. The one-repair/two-review budget remains unused. Current
+PR 26 head `8d49822e5eed1721ba9f733082216e2e2e915515`, tree
+`0ff93a20d59e6e1e769d52ce3c16644c9b83f4a5`, contains only maintainer harness
+bootstrap changes relative to the original blocked head. Resolving this boundary
+requires authoritative compatibility evidence or explicit approval for a
+coordinated dependency change; DownstreamApi was not silently upgraded.
+
+After both sessions completed, all three temporary Agents variables were removed
+and the original empty Agents state was verified. The Actions dispatcher variable,
+Client PR 25, issue states and retired fork remained untouched. The approved fork
+default now contains the tested workflow-only repair at
+`8389721b30b1430fba6184bc062944b2fe4fc0df`. No permission/policy or schedule change,
+merge, review-budget reset, local SDK operation or live authentication was made.
 
 Both PRs remain draft and unmerged. SDK unit tests, live sign-in, claims and
 cancellation integration tests, and MAUI builds were NOT RUN. Client dependency
@@ -278,6 +311,42 @@ test. A standalone smoke test does not prove agent setup import. There is no
 automatic fallback version or concurrent-target agent setup. Missing/mismatched
 configuration or evidence blocks editing rather than guessing.
 
+For a maintainer-approved Web dependency-contract investigation, set the optional
+Agents variable `MAINTENANCE_DEPENDENCY_SAMPLE` to the selected catalog id before
+continuing its existing trial. A standalone hosted smoke instead accepts
+`dependency_sample`. Setup transports this selector through
+`inputs.dependency_sample || vars.MAINTENANCE_DEPENDENCY_SAMPLE`; an Agents process
+environment fallback alone is insufficient during imported setup.
+
+`Get-MaintenanceDependencyEvidence.ps1` supplements, but never overwrites, the
+original primary manifest. It performs isolated package-only baseline and target
+restores that preserve every original direct reference except the selected Web
+version. It records both original assets graphs and resolves the corresponding
+Microsoft.Identity.Abstractions packages. Each auxiliary source checkout is the
+full commit declared by its official NuGet package in
+`AzureAD/microsoft-identity-abstractions-for-dotnet`, never a moving branch or tag
+substitute. Abstractions is auxiliary evidence, not a newly enabled direct update
+target.
+
+The supplement is `.maintenance-evidence/dependencies/manifest.json`, exported
+as `MAINTENANCE_DEPENDENCY_MANIFEST`, and is SHA-bound to the primary manifest.
+Normal evidence-aware validation automatically checks its original projects,
+assets graphs, package hashes/metadata and clean source commits. A partial
+supplement directory blocks validation. Setup additionally requires the original
+sample project's hash; post-update validation still preserves unrelated direct
+references. These graphs and inspected contracts do not prove runtime compatibility.
+Agents must consume the original supplement, never regenerate it themselves.
+
+The approved supplemental smoke
+[45447581069](https://github.com/hossnrabbit/ms-identity-docs-code-dotnet/actions/runs/45447581069)
+passed on `c4695a02357d5b0996ed22cef5c01a2272956e0f`, including real restores,
+NuGet-pinned auxiliary source, integrity checks and a disposable Web 4.18.0 build
+with DownstreamApi 3.1.0 retained and the original project restored. Its first
+actual import attempt stopped correctly before planning because the selector was
+not transported at setup time; the one-expression workflow repair at
+`654bb109a09a534b2955eb329dc548893e9096f2` passed lint and its setup contract check.
+These setup results alone are not an independently reviewed application update.
+
 The existing planner, implementer, and reviewer work for either upstream. They
 must compare public contracts, implementations, tests, parameters/defaults, and
 scenario improvements across the sample's actual baseline and target, then make
@@ -290,7 +359,7 @@ Current automation still stops at issue creation: automatic agent assignment is
 disabled. Package-selected test-branch setup import and strict provenance remain
 prerequisites for unattended code-update PRs. The live record above verifies
 an actual reviewed Client sample update and its separate final hosted matrix;
-the actual IdWeb trial remains blocked before editing. This is not unattended
+the supplemented actual IdWeb trial remains blocked before editing. This is not unattended
 rollout or evidence of live authentication behavior.
 
 ## Historical Prototype Setup (Not For This Test Branch)
@@ -363,7 +432,7 @@ files and the manifest handoff in a separate Bash step. It writes the manifest t
 convenience. The fixed repository-relative path does not depend on that environment
 variable being available to the agent. Git ignores the entire evidence directory.
 
-Setup requires the repository Actions variables `MAINTENANCE_PACKAGE` and
+Setup requires the repository Agents variables `MAINTENANCE_PACKAGE` and
 `MAINTENANCE_TARGET_VERSION` BEFORE starting a fresh session. Both the issue
 package and target must match the prepared manifest and official upstream.
 This is deliberately a single-target pilot, not concurrent multi-release routing.
