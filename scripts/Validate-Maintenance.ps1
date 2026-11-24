@@ -57,6 +57,7 @@ if ($EvidenceManifest) {
         $packageCommit = Get-MaintenancePackageCommit -Package $Package -Version $release.version -PackagePath $packagePath
         if ($packageCommit -ine $release.commit) { throw 'Source snapshot does not match the original NuGet-recorded commit.' }
     }
+    Test-MaintenanceDependencyEvidence -EvidenceManifest $EvidenceManifest -SetupCheck:$SetupCheck
     Write-Host 'PASS: original source/package snapshots match NuGet-recorded commits and are unchanged; tags are advisory.'
 }
 

@@ -43,6 +43,9 @@ must be justified against the selected upstream's exact baseline/target sources.
   (matches/differs/unavailable) without substituting its commit or blocking on it.
   Missing metadata, an unavailable NuGet-recorded commit, or altered original
   package/source/diff evidence still blocks the affected scope.
+  If setup supplies `MAINTENANCE_DEPENDENCY_MANIFEST`, also read that original
+  supplement and its baseline/target restore graphs and NuGet-pinned Abstractions
+  sources. Supplemental contracts do not authorize changing unrelated references.
 - Release notes alone are insufficient. Compare relevant public API contracts,
   implementations, SDK tests, and migration guidance across the full baseline to
   target range. Do not compare against the moving SDK main branch. Treat SDK
@@ -58,7 +61,9 @@ must be justified against the selected upstream's exact baseline/target sources.
   evidence, execute downloaded SDK code/build scripts, or commit downloaded
   sources, packages, or manifest. `.maintenance-evidence` is ignored by Git.
   A maintainer must configure matching `MAINTENANCE_PACKAGE` and
-  `MAINTENANCE_TARGET_VERSION` repository Actions variables BEFORE a new session.
+  `MAINTENANCE_TARGET_VERSION` repository Agents variables BEFORE a new session.
+  Actions variables are not transported into Copilot sessions; setup reads the
+  imported Agents environment variables when explicit workflow inputs are absent.
   There is no automatic source/version fallback. Explicit setup workflow inputs
   are for smoke tests, not proof that agent setup imported the matching evidence.
   Never treat a different prepared target as equivalent to the requested release.

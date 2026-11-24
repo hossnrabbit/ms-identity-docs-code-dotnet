@@ -77,6 +77,8 @@ function Get-MaintenanceSource {
 
     $repository = if ($Package -ceq 'Microsoft.Identity.Client') {
         'AzureAD/microsoft-authentication-library-for-dotnet'
+    } elseif ($Package -ceq 'Microsoft.Identity.Abstractions') {
+        'AzureAD/microsoft-identity-abstractions-for-dotnet'
     } elseif ($Package -cmatch '^Microsoft\.Identity\.Web(?:\.[A-Za-z0-9]+)*$') {
         'AzureAD/microsoft-identity-web'
     } else { throw 'Unsupported identity package.' }
@@ -114,6 +116,89 @@ function Get-MaintenancePackageCommit {
     $commit = $repository.GetAttribute('commit')
     if ($commit -notmatch '^[0-9a-fA-F]{40}$') { throw 'Package must identify a full source commit.' }
     $commit.ToLowerInvariant()
+}
+
+function Test-MaintenanceDependencyEvidence {
+    param([Parameter(Mandatory)][string] $EvidenceManifest, [switch] $SetupCheck)
+
+    $path = Join-Path (Split-Path $EvidenceManifest -Parent) 'dependencies/manifest.json'
+    if (!(Test-Path -LiteralPath $path)) {
+        if (Test-Path -LiteralPath (Split-Path $path -Parent)) { throw 'Supplemental evidence directory is incomplete.' }
+        return
+    }
+    $primary = Get-Content -LiteralPath $EvidenceManifest -Raw | ConvertFrom-Json
+    $evidence = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+    if ($evidence.schemaVersion -ne 1 -or $evidence.sourceProvenance -cne 'nuget-repository-commit' -or
+        $primary.package -cne 'Microsoft.Identity.Web' -or
+        (Get-FileHash $EvidenceManifest -Algorithm SHA256).Hash -ine $evidence.primaryManifestSha256) {
+        throw 'Supplemental evidence does not match the original Web source manifest.'
+    }
+    $sample = @(Select-MaintenanceSamples -Samples @(Get-MaintenanceSamples) -Package $primary.package -SampleId $evidence.sampleId)
+    $record = @($primary.samples | Where-Object id -CEQ $evidence.sampleId)
+    if ($sample.Count -ne 1 -or $record.Count -ne 1 -or $record[0].project -cne $evidence.project -or $sample[0].project -cne $evidence.project -or
+        $record[0].status -cnotin @('update', 'current') -or $evidence.graphs.Count -ne 2 -or
+        @($evidence.graphs.phase | Select-Object -Unique).Count -ne 2 -or
+        @($evidence.artifacts.path | Select-Object -Unique).Count -ne $evidence.artifacts.Count) {
+        throw 'Invalid supplemental sample, graph, or artifact inventory.'
+    }
+    $projectPath = Join-Path (Split-Path $PSScriptRoot -Parent) $sample[0].project
+    if ($SetupCheck -and (Get-FileHash $projectPath -Algorithm SHA256).Hash -ine $evidence.originalProjectSha256) {
+        throw 'Supplemental setup requires the pristine original sample project.'
+    }
+    [xml] $original = Get-Content -LiteralPath $projectPath -Raw
+    $requiredPaths = @(Join-Path (Split-Path $path -Parent) 'NuGet.Config')
+    foreach ($graph in $evidence.graphs) {
+        $version = switch ($graph.phase) {
+            'baseline' { $record[0].baselineVersion }
+            'target' { $primary.targetVersion }
+            default { throw 'Unknown supplemental graph phase.' }
+        }
+        if ($graph.version -cne $version) { throw 'Supplemental graph version does not match original evidence.' }
+        [xml] $project = Get-Content -LiteralPath $graph.projectPath -Raw
+        $actual = @($project.SelectNodes('//PackageReference'))
+        $expected = @($original.SelectNodes('//PackageReference'))
+        if ($project.Project.GetAttribute('Sdk') -cne 'Microsoft.NET.Sdk' -or
+            $project.SelectSingleNode('//TargetFramework').InnerText -cne $sample[0].frameworks[0] -or
+            $actual.Count -ne $expected.Count) { throw 'Supplemental restore project changed framework or reference shape.' }
+        foreach ($reference in $expected) {
+            $copy = $reference.CloneNode($true)
+            if ($copy.GetAttribute('Include') -ceq $primary.package) { $copy.SetAttribute('Version', $version) }
+            $match = @($actual | Where-Object { $_.GetAttribute('Include') -ceq $copy.GetAttribute('Include') })
+            if ($match.Count -ne 1 -or $match[0].OuterXml -cne $copy.OuterXml) { throw 'Supplemental restore changed an unrelated direct package reference.' }
+        }
+        $assets = Get-Content -LiteralPath $graph.assetsPath -Raw | ConvertFrom-Json
+        if ($assets.libraries.PSObject.Properties.Name -cnotcontains "$($primary.package)/$version" -or
+            $assets.libraries.PSObject.Properties.Name -cnotcontains "Microsoft.Identity.Abstractions/$($graph.abstractionsVersion)") {
+            throw 'Supplemental dependency graph does not match its exact package identities.'
+        }
+        $requiredPaths += @($graph.projectPath, $graph.assetsPath)
+    }
+    if (@($evidence.releases.version | Select-Object -Unique).Count -ne $evidence.releases.Count -or
+        (Compare-Object @($evidence.graphs.abstractionsVersion | Sort-Object -Unique) @($evidence.releases.version | Sort-Object -Unique))) {
+        throw 'Supplemental source inventory does not cover the resolved Abstractions versions.'
+    }
+    foreach ($release in $evidence.releases) {
+        if ($release.package -cne 'Microsoft.Identity.Abstractions' -or $release.version -notmatch '^\d+\.\d+\.\d+$' -or
+            $release.repository -cne (Get-MaintenanceSource -Package $release.package).repositoryUrl -or
+            $release.commit -notmatch '^[0-9a-fA-F]{40}$') { throw 'Invalid supplemental source identity.' }
+        $head = & git -C $release.sourcePath rev-parse HEAD
+        if ($LASTEXITCODE -ne 0 -or $head.Trim() -ine $release.commit) { throw 'Supplemental source does not match its recorded commit.' }
+        $changes = @(& git -C $release.sourcePath status --porcelain)
+        if ($LASTEXITCODE -ne 0 -or $changes.Count) { throw 'Supplemental source checkout changed.' }
+        if ((Get-MaintenancePackageCommit -Package $release.package -Version $release.version -PackagePath $release.packagePath) -ine $release.commit) {
+            throw 'Supplemental source does not match the NuGet-recorded commit.'
+        }
+        $requiredPaths += $release.packagePath
+    }
+    if (Compare-Object @($requiredPaths | Sort-Object) @($evidence.artifacts.path | Sort-Object)) {
+        throw 'Supplemental snapshot inventory is incomplete.'
+    }
+    foreach ($artifact in $evidence.artifacts) {
+        if ((Get-FileHash -LiteralPath $artifact.path -Algorithm SHA256).Hash -ine $artifact.sha256) {
+            throw 'Original supplemental evidence artifact changed.'
+        }
+    }
+    Write-Host 'PASS: original supplemental restore graphs, direct references, packages, and NuGet-recorded source commits are unchanged.'
 }
 
 function Select-MaintenanceSamples {

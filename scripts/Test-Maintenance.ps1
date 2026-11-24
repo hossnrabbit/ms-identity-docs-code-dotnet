@@ -174,20 +174,27 @@ try {
     & (Join-Path $PSScriptRoot 'Validate-Maintenance.ps1') -ExpectedVersion $console.versionSpec -EvidenceManifest $manifestPath -CheckOnly
     $diffs[1].name = 'sdk-client'
     $setupManifest = $manifest | ConvertTo-Json -Depth 12 | ConvertFrom-Json
-    $setupManifest.targetVersion = '4.91.1'
+    $consoleVersion = [version] $console.versionSpec
+    $setupVersion = '{0}.{1}.{2}' -f $consoleVersion.Major, $consoleVersion.Minor, ($consoleVersion.Build + 1)
+    $setupPackagePath = Join-Path $scratch "$setupVersion.nupkg"
+    if (!(Test-Path -LiteralPath $setupPackagePath)) {
+        New-TestPackage -Path $setupPackagePath -Package 'Microsoft.Identity.Client' -Version $setupVersion -Commit $commit
+    }
+    $setupManifest.targetVersion = $setupVersion
     $setupTarget = $setupManifest.releases[0] | ConvertTo-Json | ConvertFrom-Json
-    $setupTarget.version = '4.91.1'
-    $setupTarget.packageSha256 = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash
+    $setupTarget.version = $setupVersion
+    $setupTarget.tag = $setupVersion
+    $setupTarget.packageSha256 = (Get-FileHash -LiteralPath $setupPackagePath -Algorithm SHA256).Hash
     $setupManifest.releases = @($setupManifest.releases[0], $setupTarget)
-    $setupManifest.samples[0].targetVersion = '4.91.1'
+    $setupManifest.samples[0].targetVersion = $setupVersion
     $setupManifest.samples[0].status = 'update'
-    $setupManifest.comparisons[0].targetVersion = '4.91.1'
+    $setupManifest.comparisons[0].targetVersion = $setupVersion
     $setupManifest.comparisons[0].sourceDiffs[1].name = 'scenario-apis'
     $setupManifestPath = Join-Path $scratch 'setup-manifest.json'
     $setupManifest | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $setupManifestPath
-    & (Join-Path $PSScriptRoot 'Validate-Maintenance.ps1') -ExpectedVersion '4.91.1' -EvidenceManifest $setupManifestPath -CheckOnly -SetupCheck
-    Assert-Throws { & (Join-Path $PSScriptRoot 'Validate-Maintenance.ps1') -ExpectedVersion '4.91.1' -EvidenceManifest $setupManifestPath -CheckOnly } '*Expected console-cli Microsoft.Identity.Client reference 4.91.1*'
-    Assert-Throws { & (Join-Path $PSScriptRoot 'Validate-Maintenance.ps1') -ExpectedVersion '4.91.1' -EvidenceManifest $setupManifestPath -SetupCheck } '*SetupCheck requires original evidence and CheckOnly*'
+    & (Join-Path $PSScriptRoot 'Validate-Maintenance.ps1') -ExpectedVersion $setupVersion -EvidenceManifest $setupManifestPath -CheckOnly -SetupCheck
+    Assert-Throws { & (Join-Path $PSScriptRoot 'Validate-Maintenance.ps1') -ExpectedVersion $setupVersion -EvidenceManifest $setupManifestPath -CheckOnly } "*Expected console-cli Microsoft.Identity.Client reference $setupVersion*"
+    Assert-Throws { & (Join-Path $PSScriptRoot 'Validate-Maintenance.ps1') -ExpectedVersion $setupVersion -EvidenceManifest $setupManifestPath -SetupCheck } '*SetupCheck requires original evidence and CheckOnly*'
     $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifestPath
     Assert-Throws { & (Join-Path $PSScriptRoot 'Validate-Maintenance.ps1') -ExpectedVersion $console.versionSpec -EvidenceManifest $manifestPath -CheckOnly } '*both distinct diff families*'
     $diffs[1].name = 'scenario-apis'
@@ -273,6 +280,57 @@ try {
         } finally {
             Remove-Variable maintenanceSourceFixture -Scope Global
         }
+    }
+    & {
+        $global:maintenanceDependencyFixture = @{ git = (Get-Command git -CommandType Application | Select-Object -First 1).Source; remote = $sourcePath; commit = $commit; calls = 0 }
+        function git {
+            $arguments = @($args | ForEach-Object {
+                if ($_ -ceq 'https://github.com/AzureAD/microsoft-identity-abstractions-for-dotnet.git') { $global:maintenanceDependencyFixture.remote } else { $_ }
+            })
+            & $global:maintenanceDependencyFixture.git @arguments
+        }
+        function dotnet {
+            $global:maintenanceDependencyFixture.calls++
+            Assert-True ($args[0] -ceq 'restore' -and $args -contains '-p:NuGetAudit=false') 'Only isolated dependency restore is permitted.'
+            [xml] $project = Get-Content -LiteralPath $args[1] -Raw
+            $webReference = $project.SelectSingleNode('//PackageReference[@Include="Microsoft.Identity.Web"]')
+            $auxiliaryVersion = if ($global:maintenanceDependencyFixture.calls -eq 1) { '6.0.0' } else { '9.0.0' }
+            $packageRoot = $args[[array]::IndexOf($args, '--packages') + 1]
+            $packageDirectory = Join-Path $packageRoot "microsoft.identity.abstractions/$auxiliaryVersion"
+            New-Item -ItemType Directory -Path $packageDirectory -Force | Out-Null
+            New-TestPackage -Path (Join-Path $packageDirectory "microsoft.identity.abstractions.$auxiliaryVersion.nupkg") -Package 'Microsoft.Identity.Abstractions' -Version $auxiliaryVersion -Commit $global:maintenanceDependencyFixture.commit
+            $assetsDirectory = Join-Path (Split-Path $args[1] -Parent) 'obj'
+            New-Item -ItemType Directory -Path $assetsDirectory -Force | Out-Null
+            @{ libraries = @{ "Microsoft.Identity.Web/$($webReference.GetAttribute('Version'))" = @{}; "Microsoft.Identity.Abstractions/$auxiliaryVersion" = @{} } } |
+                ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $assetsDirectory 'project.assets.json')
+            $global:LASTEXITCODE = 0
+        }
+        try {
+            $dependencyPrimaryPath = Join-Path $scratch 'dependency-primary.json'
+            $manifest | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $dependencyPrimaryPath
+            $originalHash = (Get-FileHash (Join-Path (Split-Path $PSScriptRoot -Parent) $webSample.project)).Hash
+            $dependencyPath = & (Join-Path $PSScriptRoot 'Get-MaintenanceDependencyEvidence.ps1') -EvidenceManifest $dependencyPrimaryPath -SampleId $webSample.id
+            $dependency = Get-Content -LiteralPath $dependencyPath -Raw | ConvertFrom-Json
+            Assert-True ($dependency.graphs.Count -eq 2 -and $dependency.releases.Count -eq 2 -and $global:maintenanceDependencyFixture.calls -eq 2) 'Expected both isolated restore graphs and exact supplemental sources.'
+            Assert-True ((Get-FileHash (Join-Path (Split-Path $PSScriptRoot -Parent) $webSample.project)).Hash -ceq $originalHash) 'Supplemental restore changed the original sample.'
+            Test-MaintenanceDependencyEvidence -EvidenceManifest $dependencyPrimaryPath -SetupCheck
+            foreach ($graph in $dependency.graphs) {
+                [xml] $restoredProject = Get-Content -LiteralPath $graph.projectPath -Raw
+                $originalDownstreamVersion = ($webSample.references | Where-Object package -CEQ 'Microsoft.Identity.Web.DownstreamApi').versionSpec
+                Assert-True ($restoredProject.SelectSingleNode('//PackageReference[@Include="Microsoft.Identity.Web.DownstreamApi"]').GetAttribute('Version') -ceq $originalDownstreamVersion) 'Supplemental restore changed unrelated DownstreamApi.'
+            }
+            $dependency.graphs[0].version = '0.0.1'
+            $dependency | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $dependencyPath
+            Assert-Throws { Test-MaintenanceDependencyEvidence -EvidenceManifest $dependencyPrimaryPath } '*graph version does not match*'
+            $dependency.graphs[0].version = $webSample.versionSpec
+            $dependency | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $dependencyPath
+            ' ' | Add-Content -LiteralPath $dependency.graphs[0].assetsPath
+            Assert-Throws { Test-MaintenanceDependencyEvidence -EvidenceManifest $dependencyPrimaryPath } '*Original supplemental evidence artifact changed*'
+            Assert-Throws { & (Join-Path $PSScriptRoot 'Get-MaintenanceDependencyEvidence.ps1') -EvidenceManifest $dependencyPrimaryPath -SampleId $webSample.id } '*already exists*'
+            Assert-Throws { Select-MaintenanceSamples -Samples $samples -Package 'Microsoft.Identity.Abstractions' } '*No cataloged sample directly references*'
+            Remove-Item -LiteralPath $dependencyPath
+            Assert-Throws { Test-MaintenanceDependencyEvidence -EvidenceManifest $dependencyPrimaryPath } '*directory is incomplete*'
+        } finally { Remove-Variable maintenanceDependencyFixture -Scope Global }
     }
     $catalog = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'maintenance-samples.json') -Raw | ConvertFrom-Json
     $catalog.samples = @($catalog.samples) + $catalog.samples[0]
